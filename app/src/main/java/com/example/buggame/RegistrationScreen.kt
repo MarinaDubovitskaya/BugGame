@@ -292,21 +292,20 @@ fun getZodiac(cal: Calendar): String {
 
 // Zodiac -> drawable mapping (placeholder)
 fun getZodiacDrawableRes(zodiac: String): Int {
-    // Замените на реальные drawables в res/drawable, например R.drawable.aries и т.д.
     return when (zodiac) {
-        "Овен" -> R.mipmap.ic_launcher
-        "Телец" -> R.mipmap.ic_launcher
-        "Близнецы" -> R.mipmap.ic_launcher
-        "Рак" -> R.mipmap.ic_launcher
-        "Лев" -> R.mipmap.ic_launcher
-        "Дева" -> R.mipmap.ic_launcher
-        "Весы" -> R.mipmap.ic_launcher
-        "Скорпион" -> R.mipmap.ic_launcher
-        "Стрелец" -> R.mipmap.ic_launcher
-        "Козерог" -> R.mipmap.ic_launcher
-        "Водолей" -> R.mipmap.ic_launcher
-        "Рыбы" -> R.mipmap.ic_launcher
-        else -> R.mipmap.ic_launcher
+        "Овен" -> R.drawable.ic_launcher_foreground
+        "Телец" -> R.drawable.ic_launcher_foreground
+        "Близнецы" -> R.drawable.ic_launcher_foreground
+        "Рак" -> R.drawable.ic_launcher_foreground
+        "Лев" -> R.drawable.ic_launcher_foreground
+        "Дева" -> R.drawable.ic_launcher_foreground
+        "Весы" -> R.drawable.ic_launcher_foreground
+        "Скорпион" -> R.drawable.ic_launcher_foreground
+        "Стрелец" -> R.drawable.ic_launcher_foreground
+        "Козерог" -> R.drawable.ic_launcher_foreground
+        "Водолей" -> R.drawable.ic_launcher_foreground
+        "Рыбы" -> R.drawable.ic_launcher_foreground
+        else -> R.drawable.ic_launcher_foreground
     }
 }
 
