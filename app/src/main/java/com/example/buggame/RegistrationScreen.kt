@@ -11,6 +11,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 
+// A4: Data class для игрока
+data class Player(
+    val fullName: String,
+    val gender: String,
+    val course: String
+)
+
 @Composable
 fun RegistrationScreen() {
     // A1: Состояния для ФИО
@@ -25,6 +32,9 @@ fun RegistrationScreen() {
     var selectedCourse by remember { mutableStateOf("") }
     var expanded by remember { mutableStateOf(false) }
     val courseOptions = listOf("1 курс", "2 курс", "3 курс", "4 курс", "5 курс")
+
+    // A4: Состояние для отображения результата
+    var resultText by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -130,24 +140,44 @@ fun RegistrationScreen() {
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        // --- A4: Кнопка регистрации и вывод результата ---
         Button(
             onClick = {
+                // Проверяем все поля
                 isNameError = name.isBlank()
-                if (!isNameError) {
-                    println("Данные: ФИО=$name, Пол=$selectedGender, Курс=$selectedCourse")
+
+                if (!isNameError && selectedGender.isNotEmpty() && selectedCourse.isNotEmpty()) {
+                    // Создаем объект Player
+                    val player = Player(
+                        fullName = name,
+                        gender = selectedGender,
+                        course = selectedCourse
+                    )
+
+                    // Выводим результат
+                    resultText = """
+                        Регистрация завершена!
+                        ФИО: ${player.fullName}
+                        Пол: ${player.gender}
+                        Курс: ${player.course}
+                    """.trimIndent()
                 }
             },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Проверить данные")
+            Text("Зарегистрироваться")
         }
 
-        if (name.isNotBlank() && selectedGender.isNotBlank() && selectedCourse.isNotBlank()) {
+        // A4: Поле для вывода результата
+        if (resultText.isNotEmpty()) {
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "Вы ввели:\nФИО: $name\nПол: $selectedGender\nКурс: $selectedCourse",
+                text = resultText,
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color.Gray
+                color = Color.Green,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp)
             )
         }
     }
