@@ -158,16 +158,27 @@ fun RegistrationScreen(modifier: Modifier = Modifier) {
             modifier = Modifier.padding(bottom = 8.dp)
         )
 
-        OutlinedButton(onClick = {
-            showDatePicker(ctx, birthCalendar) { year, month, day ->
-                birthCalendar.set(year, month, day)
-                birthLabel = formatDate(birthCalendar)
-            }
-        }, modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(
+            onClick = {
+                showDatePicker(ctx, birthCalendar) { year, month, day ->
+                    birthCalendar.set(year, month, day)
+                    birthLabel = formatDate(birthCalendar)
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Text(if (birthLabel.isBlank()) "Выбрать дату" else "Дата: $birthLabel")
         }
 
         AppStyles.sectionSpacing
+
+        // --- v4: превью знака зодиака (текст) ---
+        val zodiacPreview = getZodiac(birthCalendar)
+        Text(
+            text = "Знак зодиака: $zodiacPreview",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
 
         // Кнопка с стилями
         Button(
@@ -182,6 +193,7 @@ fun RegistrationScreen(modifier: Modifier = Modifier) {
                         Пол: ${player.gender}
                         Курс: ${player.course}
                         Дата рождения: $birthLabel
+                        Знак зодиака: $zodiacPreview
                     """.trimIndent()
                 }
             },
@@ -230,6 +242,31 @@ private fun formatDate(cal: Calendar): String {
     return "$day.$month.$year"
 }
 
+// ---- v4: zodiac functions ----
+fun getZodiac(day: Int, month: Int): String {
+    return when {
+        (month == 3 && day >= 21) || (month == 4 && day <= 20) -> "Овен"
+        (month == 4 && day >= 21) || (month == 5 && day <= 20) -> "Телец"
+        (month == 5 && day >= 21) || (month == 6 && day <= 21) -> "Близнецы"
+        (month == 6 && day >= 22) || (month == 7 && day <= 22) -> "Рак"
+        (month == 7 && day >= 23) || (month == 8 && day <= 22) -> "Лев"
+        (month == 8 && day >= 23) || (month == 9 && day <= 22) -> "Дева"
+        (month == 9 && day >= 23) || (month == 10 && day <= 22) -> "Весы"
+        (month == 10 && day >= 23) || (month == 11 && day <= 21) -> "Скорпион"
+        (month == 11 && day >= 22) || (month == 12 && day <= 21) -> "Стрелец"
+        (month == 12 && day >= 22) || (month == 1 && day <= 20) -> "Козерог"
+        (month == 1 && day >= 21) || (month == 2 && day <= 18) -> "Водолей"
+        (month == 2 && day >= 19) || (month == 3 && day <= 20) -> "Рыбы"
+        else -> "Неизвестно"
+    }
+}
+
+fun getZodiac(cal: Calendar): String {
+    val day = cal.get(Calendar.DAY_OF_MONTH)
+    val month = cal.get(Calendar.MONTH) + 1
+    return getZodiac(day, month)
+}
+
 @Preview(showBackground = true)
 @Composable
 fun RegistrationScreenPreview() {
@@ -238,7 +275,7 @@ fun RegistrationScreenPreview() {
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
-            RegistrationScreen()
+            RegistrationScreen(modifier = Modifier.fillMaxSize())
         }
     }
 }
