@@ -11,7 +11,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 
-// A4: Data class для игрока
 data class Player(
     val fullName: String,
     val gender: String,
@@ -20,33 +19,29 @@ data class Player(
 
 @Composable
 fun RegistrationScreen() {
-    // A1: Состояния для ФИО
     var name by remember { mutableStateOf("") }
     var isNameError by remember { mutableStateOf(false) }
-
-    // A2: Состояния для выбора пола
     var selectedGender by remember { mutableStateOf("") }
-    val genderOptions = listOf("Мужской", "Женский")
-
-    // A3: Состояния для выбора курса
     var selectedCourse by remember { mutableStateOf("") }
     var expanded by remember { mutableStateOf(false) }
-    val courseOptions = listOf("1 курс", "2 курс", "3 курс", "4 курс", "5 курс")
-
-    // A4: Состояние для отображения результата
     var resultText by remember { mutableStateOf("") }
+
+    val genderOptions = listOf("Мужской", "Женский")
+    val courseOptions = listOf("1 курс", "2 курс", "3 курс", "4 курс", "5 курс")
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        // --- A1: Поле ввода ФИО ---
+        // Заголовок ФИО
         Text(
             text = "ФИО",
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(bottom = 4.dp)
         )
+
+        // Поле ФИО с стилями
         OutlinedTextField(
             value = name,
             onValueChange = {
@@ -55,8 +50,10 @@ fun RegistrationScreen() {
             },
             label = { Text("Фамилия Имя Отчество") },
             isError = isNameError,
-            modifier = Modifier.fillMaxWidth()
+            modifier = AppStyles.textFieldModifier,
+            shape = MaterialTheme.shapes.medium
         )
+
         if (isNameError) {
             Text(
                 text = "Поле не может быть пустым",
@@ -66,15 +63,16 @@ fun RegistrationScreen() {
             )
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        AppStyles.sectionSpacing
 
-        // --- A2: Выбор пола ---
+        // Заголовок Пол
         Text(
             text = "Пол",
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(bottom = 8.dp)
         )
 
+        // Радиокнопки с отступами
         Column {
             genderOptions.forEach { gender ->
                 Row(
@@ -85,7 +83,10 @@ fun RegistrationScreen() {
                 ) {
                     RadioButton(
                         selected = (selectedGender == gender),
-                        onClick = { selectedGender = gender }
+                        onClick = { selectedGender = gender },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = MaterialTheme.colorScheme.primary
+                        )
                     )
                     Text(
                         text = gender,
@@ -96,22 +97,24 @@ fun RegistrationScreen() {
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        AppStyles.sectionSpacing
 
-        // --- A3: Выбор курса ---
+        // Заголовок Курс
         Text(
             text = "Курс",
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(bottom = 8.dp)
         )
 
+        // Выпадающий список
         Box(modifier = Modifier.fillMaxWidth()) {
             OutlinedTextField(
                 value = selectedCourse,
                 onValueChange = {},
                 readOnly = true,
                 label = { Text("Выберите курс") },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = AppStyles.textFieldModifier,
+                shape = MaterialTheme.shapes.medium,
                 trailingIcon = {
                     IconButton(onClick = { expanded = true }) {
                         Icon(
@@ -138,23 +141,15 @@ fun RegistrationScreen() {
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        AppStyles.sectionSpacing
 
-        // --- A4: Кнопка регистрации и вывод результата ---
+        // Кнопка с стилями
         Button(
             onClick = {
-                // Проверяем все поля
                 isNameError = name.isBlank()
 
                 if (!isNameError && selectedGender.isNotEmpty() && selectedCourse.isNotEmpty()) {
-                    // Создаем объект Player
-                    val player = Player(
-                        fullName = name,
-                        gender = selectedGender,
-                        course = selectedCourse
-                    )
-
-                    // Выводим результат
+                    val player = Player(name, selectedGender, selectedCourse)
                     resultText = """
                         Регистрация завершена!
                         ФИО: ${player.fullName}
@@ -163,21 +158,25 @@ fun RegistrationScreen() {
                     """.trimIndent()
                 }
             },
-            modifier = Modifier.fillMaxWidth()
+            modifier = AppStyles.buttonModifier,
+            shape = MaterialTheme.shapes.medium,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary
+            )
         ) {
             Text("Зарегистрироваться")
         }
 
-        // A4: Поле для вывода результата
+        // Результат
         if (resultText.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(16.dp))
+            AppStyles.smallSpacing
             Text(
                 text = resultText,
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color.Green,
+                color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(8.dp)
+                    .padding(16.dp)
             )
         }
     }
@@ -186,7 +185,12 @@ fun RegistrationScreen() {
 @Preview(showBackground = true)
 @Composable
 fun RegistrationScreenPreview() {
-    MaterialTheme {
-        RegistrationScreen()
+    BugGameTheme {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            RegistrationScreen()
+        }
     }
 }
