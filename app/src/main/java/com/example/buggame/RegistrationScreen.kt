@@ -1,6 +1,7 @@
 package com.example.buggame
 
 import android.app.DatePickerDialog
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -10,6 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import java.util.*
@@ -180,6 +182,19 @@ fun RegistrationScreen(modifier: Modifier = Modifier) {
             modifier = Modifier.padding(bottom = 8.dp)
         )
 
+        // --- v5: превью знака (иконка) ---
+        val zodiacRes = getZodiacDrawableRes(zodiacPreview)
+        Image(
+            painter = painterResource(id = zodiacRes),
+            contentDescription = "Знак зодиака",
+            modifier = Modifier
+                .size(96.dp)
+                .padding(top = 8.dp)
+                .align(Alignment.CenterHorizontally)
+        )
+
+        AppStyles.sectionSpacing
+
         // Кнопка с стилями
         Button(
             onClick = {
@@ -265,6 +280,26 @@ fun getZodiac(cal: Calendar): String {
     val day = cal.get(Calendar.DAY_OF_MONTH)
     val month = cal.get(Calendar.MONTH) + 1
     return getZodiac(day, month)
+}
+
+// ---- v5: zodiac -> drawable mapping (placeholder) ----
+fun getZodiacDrawableRes(zodiac: String): Int {
+    // TODO: замените R.mipmap.ic_launcher на реальные drawables (R.drawable.aries и т.д.)
+    return when (zodiac) {
+        "Овен" -> R.mipmap.ic_launcher
+        "Телец" -> R.mipmap.ic_launcher
+        "Близнецы" -> R.mipmap.ic_launcher
+        "Рак" -> R.mipmap.ic_launcher
+        "Лев" -> R.mipmap.ic_launcher
+        "Дева" -> R.mipmap.ic_launcher
+        "Весы" -> R.mipmap.ic_launcher
+        "Скорпион" -> R.mipmap.ic_launcher
+        "Стрелец" -> R.mipmap.ic_launcher
+        "Козерог" -> R.mipmap.ic_launcher
+        "Водолей" -> R.mipmap.ic_launcher
+        "Рыбы" -> R.mipmap.ic_launcher
+        else -> R.mipmap.ic_launcher
+    }
 }
 
 @Preview(showBackground = true)
