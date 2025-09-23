@@ -1,5 +1,6 @@
 package com.example.buggame
 
+import android.app.DatePickerDialog
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -8,8 +9,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import java.util.*
 
 data class Player(
     val fullName: String,
@@ -18,7 +21,7 @@ data class Player(
 )
 
 @Composable
-fun RegistrationScreen() {
+fun RegistrationScreen(modifier: Modifier = Modifier) {
     var name by remember { mutableStateOf("") }
     var isNameError by remember { mutableStateOf(false) }
     var selectedGender by remember { mutableStateOf("") }
@@ -26,11 +29,16 @@ fun RegistrationScreen() {
     var expanded by remember { mutableStateOf(false) }
     var resultText by remember { mutableStateOf("") }
 
+    // B2: дата рождения — состояние
+    val birthCalendar = remember { Calendar.getInstance() }
+    var birthLabel by remember { mutableStateOf(formatDate(birthCalendar)) }
+    val ctx = LocalContext.current
+
     val genderOptions = listOf("Мужской", "Женский")
     val courseOptions = listOf("1 курс", "2 курс", "3 курс", "4 курс", "5 курс")
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .padding(16.dp)
     ) {
@@ -143,6 +151,24 @@ fun RegistrationScreen() {
 
         AppStyles.sectionSpacing
 
+        // --- Новая часть: выбор даты рождения ---
+        Text(
+            text = "Дата рождения",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+
+        OutlinedButton(onClick = {
+            showDatePicker(ctx, birthCalendar) { year, month, day ->
+                birthCalendar.set(year, month, day)
+                birthLabel = formatDate(birthCalendar)
+            }
+        }, modifier = Modifier.fillMaxWidth()) {
+            Text(if (birthLabel.isBlank()) "Выбрать дату" else "Дата: $birthLabel")
+        }
+
+        AppStyles.sectionSpacing
+
         // Кнопка с стилями
         Button(
             onClick = {
@@ -155,6 +181,7 @@ fun RegistrationScreen() {
                         ФИО: ${player.fullName}
                         Пол: ${player.gender}
                         Курс: ${player.course}
+                        Дата рождения: $birthLabel
                     """.trimIndent()
                 }
             },
@@ -180,6 +207,27 @@ fun RegistrationScreen() {
             )
         }
     }
+}
+
+private fun showDatePicker(
+    context: android.content.Context,
+    cal: Calendar,
+    onDateSelected: (year: Int, month: Int, day: Int) -> Unit
+) {
+    val year = cal.get(Calendar.YEAR)
+    val month = cal.get(Calendar.MONTH)
+    val day = cal.get(Calendar.DAY_OF_MONTH)
+    val dpd = DatePickerDialog(context, { _, y, m, d ->
+        onDateSelected(y, m, d)
+    }, year, month, day)
+    dpd.show()
+}
+
+private fun formatDate(cal: Calendar): String {
+    val day = cal.get(Calendar.DAY_OF_MONTH)
+    val month = cal.get(Calendar.MONTH) + 1
+    val year = cal.get(Calendar.YEAR)
+    return "$day.$month.$year"
 }
 
 @Preview(showBackground = true)
