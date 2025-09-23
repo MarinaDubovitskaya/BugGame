@@ -16,14 +16,31 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import java.util.*
 
+/**
+ * Существующий Player (оставляем, чтобы не вмешиваться в код A).
+ * Для финальной регистрации используем RegisteredPlayer ниже.
+ */
 data class Player(
     val fullName: String,
     val gender: String,
     val course: String
 )
 
+/**
+ * Финальная структура регистрации (Student B).
+ */
+data class RegisteredPlayer(
+    val fullName: String,
+    val gender: String,
+    val course: String,
+    val difficulty: Int,
+    val birthDate: Calendar,
+    val zodiac: String
+)
+
 @Composable
 fun RegistrationScreen(modifier: Modifier = Modifier) {
+    // A: базовые поля
     var name by remember { mutableStateOf("") }
     var isNameError by remember { mutableStateOf(false) }
     var selectedGender by remember { mutableStateOf("") }
@@ -31,7 +48,11 @@ fun RegistrationScreen(modifier: Modifier = Modifier) {
     var expanded by remember { mutableStateOf(false) }
     var resultText by remember { mutableStateOf("") }
 
-    // B2: дата рождения — состояние
+    // B1: difficulty slider state (1..10)
+    var difficultyFloat by remember { mutableStateOf(1f) }
+    val difficulty: Int = difficultyFloat.toInt()
+
+    // B2: birth date state
     val birthCalendar = remember { Calendar.getInstance() }
     var birthLabel by remember { mutableStateOf(formatDate(birthCalendar)) }
     val ctx = LocalContext.current
@@ -51,7 +72,7 @@ fun RegistrationScreen(modifier: Modifier = Modifier) {
             modifier = Modifier.padding(bottom = 4.dp)
         )
 
-        // Поле ФИО с стилями
+        // Поле ФИО
         OutlinedTextField(
             value = name,
             onValueChange = {
@@ -63,7 +84,6 @@ fun RegistrationScreen(modifier: Modifier = Modifier) {
             modifier = AppStyles.textFieldModifier,
             shape = MaterialTheme.shapes.medium
         )
-
         if (isNameError) {
             Text(
                 text = "Поле не может быть пустым",
@@ -73,17 +93,11 @@ fun RegistrationScreen(modifier: Modifier = Modifier) {
             )
         }
 
-        AppStyles.sectionSpacing
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // Заголовок Пол
-        Text(
-            text = "Пол",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-
-        // Радиокнопки с отступами
-        Column {
+        // Пол
+        Text(text = "Пол", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
+        Column(modifier = Modifier.padding(vertical = 4.dp)) {
             genderOptions.forEach { gender ->
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -94,29 +108,17 @@ fun RegistrationScreen(modifier: Modifier = Modifier) {
                     RadioButton(
                         selected = (selectedGender == gender),
                         onClick = { selectedGender = gender },
-                        colors = RadioButtonDefaults.colors(
-                            selectedColor = MaterialTheme.colorScheme.primary
-                        )
+                        colors = RadioButtonDefaults.colors(selectedColor = MaterialTheme.colorScheme.primary)
                     )
-                    Text(
-                        text = gender,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(start = 8.dp)
-                    )
+                    Text(text = gender, modifier = Modifier.padding(start = 8.dp))
                 }
             }
         }
 
-        AppStyles.sectionSpacing
+        Spacer(modifier = Modifier.height(12.dp))
 
-        // Заголовок Курс
-        Text(
-            text = "Курс",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-
-        // Выпадающий список
+        // Курс (Dropdown)
+        Text(text = "Курс", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
         Box(modifier = Modifier.fillMaxWidth()) {
             OutlinedTextField(
                 value = selectedCourse,
@@ -127,39 +129,36 @@ fun RegistrationScreen(modifier: Modifier = Modifier) {
                 shape = MaterialTheme.shapes.medium,
                 trailingIcon = {
                     IconButton(onClick = { expanded = true }) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowDropDown,
-                            contentDescription = "Выбрать курс"
-                        )
+                        Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = "Выбрать курс")
                     }
                 }
             )
-
-            DropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false }
-            ) {
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                 courseOptions.forEach { course ->
-                    DropdownMenuItem(
-                        text = { Text(course) },
-                        onClick = {
-                            selectedCourse = course
-                            expanded = false
-                        }
-                    )
+                    DropdownMenuItem(text = { Text(course) }, onClick = {
+                        selectedCourse = course
+                        expanded = false
+                    })
                 }
             }
         }
 
-        AppStyles.sectionSpacing
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // --- Новая часть: выбор даты рождения ---
-        Text(
-            text = "Дата рождения",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(bottom = 8.dp)
+        // B1: Slider (сложность)
+        Text(text = "Уровень сложности: $difficulty", style = MaterialTheme.typography.titleMedium)
+        Slider(
+            value = difficultyFloat,
+            onValueChange = { difficultyFloat = it.coerceIn(1f, 10f) },
+            valueRange = 1f..10f,
+            steps = 8,
+            modifier = Modifier.fillMaxWidth()
         )
 
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // B2: Date picker
+        Text(text = "Дата рождения", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
         OutlinedButton(
             onClick = {
                 showDatePicker(ctx, birthCalendar) { year, month, day ->
@@ -172,17 +171,13 @@ fun RegistrationScreen(modifier: Modifier = Modifier) {
             Text(if (birthLabel.isBlank()) "Выбрать дату" else "Дата: $birthLabel")
         }
 
-        AppStyles.sectionSpacing
+        Spacer(modifier = Modifier.height(12.dp))
 
-        // --- v4: превью знака зодиака (текст) ---
+        // B3: zodiac preview (text)
         val zodiacPreview = getZodiac(birthCalendar)
-        Text(
-            text = "Знак зодиака: $zodiacPreview",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
+        Text(text = "Знак зодиака: $zodiacPreview", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
 
-        // --- v5: превью знака (иконка) ---
+        // B4: zodiac preview (image) — placeholder by default
         val zodiacRes = getZodiacDrawableRes(zodiacPreview)
         Image(
             painter = painterResource(id = zodiacRes),
@@ -193,37 +188,49 @@ fun RegistrationScreen(modifier: Modifier = Modifier) {
                 .align(Alignment.CenterHorizontally)
         )
 
-        AppStyles.sectionSpacing
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // Кнопка с стилями
+        // FINAL: Register button — собираем RegisteredPlayer
         Button(
             onClick = {
                 isNameError = name.isBlank()
+                if (isNameError) return@Button
 
-                if (!isNameError && selectedGender.isNotEmpty() && selectedCourse.isNotEmpty()) {
-                    val player = Player(name, selectedGender, selectedCourse)
-                    resultText = """
-                        Регистрация завершена!
-                        ФИО: ${player.fullName}
-                        Пол: ${player.gender}
-                        Курс: ${player.course}
-                        Дата рождения: $birthLabel
-                        Знак зодиака: $zodiacPreview
-                    """.trimIndent()
+                if (selectedGender.isEmpty() || selectedCourse.isEmpty()) {
+                    // краткая валидация
+                    resultText = "Выберите пол и курс"
+                    return@Button
                 }
+
+                val player = RegisteredPlayer(
+                    fullName = name.trim(),
+                    gender = selectedGender,
+                    course = selectedCourse,
+                    difficulty = difficulty,
+                    birthDate = birthCalendar.clone() as Calendar,
+                    zodiac = zodiacPreview
+                )
+
+                resultText = """
+                    Регистрация завершена!
+                    ФИО: ${player.fullName}
+                    Пол: ${player.gender}
+                    Курс: ${player.course}
+                    Сложность: ${player.difficulty}
+                    Дата рождения: ${formatDate(player.birthDate)}
+                    Знак зодиака: ${player.zodiac}
+                """.trimIndent()
             },
             modifier = AppStyles.buttonModifier,
             shape = MaterialTheme.shapes.medium,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary
-            )
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
         ) {
             Text("Зарегистрироваться")
         }
 
         // Результат
         if (resultText.isNotEmpty()) {
-            AppStyles.smallSpacing
+            Spacer(modifier = Modifier.height(12.dp))
             Text(
                 text = resultText,
                 style = MaterialTheme.typography.bodyMedium,
@@ -236,6 +243,7 @@ fun RegistrationScreen(modifier: Modifier = Modifier) {
     }
 }
 
+// DatePicker helper
 private fun showDatePicker(
     context: android.content.Context,
     cal: Calendar,
@@ -257,7 +265,7 @@ private fun formatDate(cal: Calendar): String {
     return "$day.$month.$year"
 }
 
-// ---- v4: zodiac functions ----
+// Zodiac calculation
 fun getZodiac(day: Int, month: Int): String {
     return when {
         (month == 3 && day >= 21) || (month == 4 && day <= 20) -> "Овен"
@@ -282,9 +290,9 @@ fun getZodiac(cal: Calendar): String {
     return getZodiac(day, month)
 }
 
-// ---- v5: zodiac -> drawable mapping (placeholder) ----
+// Zodiac -> drawable mapping (placeholder)
 fun getZodiacDrawableRes(zodiac: String): Int {
-    // TODO: замените R.mipmap.ic_launcher на реальные drawables (R.drawable.aries и т.д.)
+    // Замените на реальные drawables в res/drawable, например R.drawable.aries и т.д.
     return when (zodiac) {
         "Овен" -> R.mipmap.ic_launcher
         "Телец" -> R.mipmap.ic_launcher
