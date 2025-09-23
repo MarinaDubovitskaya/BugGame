@@ -1,3 +1,9 @@
 <resources>
     <string name="app_name">BugGame</string>
+    <string name="difficulty_label">Сложность</string>
+    <string name="birth_label">Дата рождения</string>
+    <string name="zodiac_label">Знак зодиака</string>
+    <string name="button_register">Зарегистрироваться</string>
+
+
 </resources>
