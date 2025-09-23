@@ -1,6 +1,8 @@
 package com.example.buggame
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,6 +20,11 @@ fun RegistrationScreen() {
     // A2: Состояния для выбора пола
     var selectedGender by remember { mutableStateOf("") }
     val genderOptions = listOf("Мужской", "Женский")
+
+    // A3: Состояния для выбора курса
+    var selectedCourse by remember { mutableStateOf("") }
+    var expanded by remember { mutableStateOf(false) }
+    val courseOptions = listOf("1 курс", "2 курс", "3 курс", "4 курс", "5 курс")
 
     Column(
         modifier = Modifier
@@ -58,7 +65,6 @@ fun RegistrationScreen() {
             modifier = Modifier.padding(bottom = 8.dp)
         )
 
-        // Радиокнопки для выбора пола
         Column {
             genderOptions.forEach { gender ->
                 Row(
@@ -82,15 +88,53 @@ fun RegistrationScreen() {
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // --- Кнопка для проверки ---
+        // --- A3: Выбор курса ---
+        Text(
+            text = "Курс",
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+
+        Box(modifier = Modifier.fillMaxWidth()) {
+            OutlinedTextField(
+                value = selectedCourse,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Выберите курс") },
+                modifier = Modifier.fillMaxWidth(),
+                trailingIcon = {
+                    IconButton(onClick = { expanded = true }) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowDropDown,
+                            contentDescription = "Выбрать курс"
+                        )
+                    }
+                }
+            )
+
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false }
+            ) {
+                courseOptions.forEach { course ->
+                    DropdownMenuItem(
+                        text = { Text(course) },
+                        onClick = {
+                            selectedCourse = course
+                            expanded = false
+                        }
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
         Button(
             onClick = {
-                // A1: Проверяем ФИО
                 isNameError = name.isBlank()
-
-                // Если ошибок нет, выводим данные
-                if (!isNameError && selectedGender.isNotEmpty()) {
-                    println("Данные: ФИО=$name, Пол=$selectedGender")
+                if (!isNameError) {
+                    println("Данные: ФИО=$name, Пол=$selectedGender, Курс=$selectedCourse")
                 }
             },
             modifier = Modifier.fillMaxWidth()
@@ -98,11 +142,10 @@ fun RegistrationScreen() {
             Text("Проверить данные")
         }
 
-        // Показываем выбранные данные
-        if (name.isNotBlank() && selectedGender.isNotBlank()) {
+        if (name.isNotBlank() && selectedGender.isNotBlank() && selectedCourse.isNotBlank()) {
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "Вы ввели:\nФИО: $name\nПол: $selectedGender",
+                text = "Вы ввели:\nФИО: $name\nПол: $selectedGender\nКурс: $selectedCourse",
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.Gray
             )
