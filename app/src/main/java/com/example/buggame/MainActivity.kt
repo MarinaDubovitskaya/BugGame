@@ -18,20 +18,22 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             BugGameTheme {
-                // Оборачиваем в Scaffold (если нужно)
-                Scaffold { innerPadding ->
-                    Surface(modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
+                // ✅ innerPadding используется
+                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding)
                     ) {
-                        TabsScreen(modifier = Modifier.fillMaxSize())
+                        RegistrationScreen(
+                            modifier = Modifier.fillMaxSize()
+                        )
                     }
                 }
             }
         }
     }
 }
-
 
 @Composable
 fun Greeting(name: String, modifier: Modifier = Modifier) {
