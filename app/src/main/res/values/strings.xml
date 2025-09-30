@@ -1,3 +1,17 @@
 <resources>
     <string name="app_name">BugGame</string>
+    <string name="rules_html"><![CDATA[
+        <html>
+        <head><meta charset="utf-8"/></head>
+        <body>
+            <h1>Правила игры "Жуки"</h1>
+            <p>Здесь будут описаны игровые правила. Текст берётся из ресурсов и позже дополняется.</p>
+            <ul>
+                <li>Убегайте от тараканов</li>
+                <li>Набирайте очки — ловите бонусы</li>
+                <li>Время раунда ограничено</li>
+            </ul>
+        </body>
+        </html>
+    ]]></string>
 </resources>

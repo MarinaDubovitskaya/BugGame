@@ -53,8 +53,9 @@ fun RegistrationScreen(modifier: Modifier = Modifier) {
     val difficulty: Int = difficultyFloat.toInt()
 
     // B2: birth date state
-    val birthCalendar = remember { Calendar.getInstance() }
-    var birthLabel by remember { mutableStateOf(formatDate(birthCalendar)) }
+    var birthCalendar by remember { mutableStateOf(Calendar.getInstance()) }
+// birthLabel сделаем derived (чтобы не обновлять вручную)
+    val birthLabel by remember(birthCalendar) { derivedStateOf { formatDate(birthCalendar) } }
     val ctx = LocalContext.current
 
     val genderOptions = listOf("Мужской", "Женский")
@@ -162,8 +163,11 @@ fun RegistrationScreen(modifier: Modifier = Modifier) {
         OutlinedButton(
             onClick = {
                 showDatePicker(ctx, birthCalendar) { year, month, day ->
-                    birthCalendar.set(year, month, day)
-                    birthLabel = formatDate(birthCalendar)
+                    // создаём новый Calendar и присваиваем в state — это вызовет recomposition
+                    birthCalendar = Calendar.getInstance().apply {
+                        set(year, month, day)
+                    }
+                    // birthLabel обновится автоматически (derivedStateOf)
                 }
             },
             modifier = Modifier.fillMaxWidth()
@@ -293,18 +297,18 @@ fun getZodiac(cal: Calendar): String {
 // Zodiac -> drawable mapping (placeholder)
 fun getZodiacDrawableRes(zodiac: String): Int {
     return when (zodiac) {
-        "Овен" -> R.drawable.ic_launcher_foreground
-        "Телец" -> R.drawable.ic_launcher_foreground
-        "Близнецы" -> R.drawable.ic_launcher_foreground
-        "Рак" -> R.drawable.ic_launcher_foreground
-        "Лев" -> R.drawable.ic_launcher_foreground
-        "Дева" -> R.drawable.ic_launcher_foreground
-        "Весы" -> R.drawable.ic_launcher_foreground
-        "Скорпион" -> R.drawable.ic_launcher_foreground
-        "Стрелец" -> R.drawable.ic_launcher_foreground
-        "Козерог" -> R.drawable.ic_launcher_foreground
-        "Водолей" -> R.drawable.ic_launcher_foreground
-        "Рыбы" -> R.drawable.ic_launcher_foreground
+        "Овен" -> R.drawable.img_aries
+        "Телец" -> R.drawable.img_taurus
+        "Близнецы" -> R.drawable.img_gemini
+        "Рак" -> R.drawable.img_cancer
+        "Лев" -> R.drawable.img_leo
+        "Дева" -> R.drawable.img_virgo
+        "Весы" -> R.drawable.img_libra
+        "Скорпион" -> R.drawable.img_scorpio
+        "Стрелец" -> R.drawable.img_sagittarius
+        "Козерог" -> R.drawable.img_capricorn
+        "Водолей" -> R.drawable.img_aquatius
+        "Рыбы" -> R.drawable.img_pisces
         else -> R.drawable.ic_launcher_foreground
     }
 }
