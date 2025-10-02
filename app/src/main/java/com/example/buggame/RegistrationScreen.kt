@@ -3,10 +3,13 @@ package com.example.buggame
 import android.app.DatePickerDialog
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -14,21 +17,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.clickable
 import java.util.*
 
-/**
- * Существующий Player (оставляем, чтобы не вмешиваться в код A).
- * Для финальной регистрации используем RegisteredPlayer ниже.
- */
 data class Player(
     val fullName: String,
     val gender: String,
     val course: String
 )
 
-/**
- * Финальная структура регистрации (Student B).
- */
 data class RegisteredPlayer(
     val fullName: String,
     val gender: String,
@@ -54,16 +51,20 @@ fun RegistrationScreen(modifier: Modifier = Modifier) {
 
     // B2: birth date state
     var birthCalendar by remember { mutableStateOf(Calendar.getInstance()) }
-// birthLabel сделаем derived (чтобы не обновлять вручную)
+    // birthLabel сделаем derived (чтобы не обновлять вручную)
     val birthLabel by remember(birthCalendar) { derivedStateOf { formatDate(birthCalendar) } }
     val ctx = LocalContext.current
 
     val genderOptions = listOf("Мужской", "Женский")
     val courseOptions = listOf("1 курс", "2 курс", "3 курс", "4 курс", "5 курс")
 
+    // ДОБАВЛЕНО: состояние для прокрутки
+    val scrollState = rememberScrollState()
+
     Column(
         modifier = modifier
             .fillMaxSize()
+            .verticalScroll(scrollState)  // ← ДОБАВЛЕНО ПРОКРУТКА
             .padding(16.dp)
     ) {
         // Заголовок ФИО
@@ -126,7 +127,8 @@ fun RegistrationScreen(modifier: Modifier = Modifier) {
                 onValueChange = {},
                 readOnly = true,
                 label = { Text("Выберите курс") },
-                modifier = AppStyles.textFieldModifier,
+                modifier = AppStyles.textFieldModifier
+                    .clickable { expanded = true },  // ← ИСПРАВЛЕНО: добавлен clickable
                 shape = MaterialTheme.shapes.medium,
                 trailingIcon = {
                     IconButton(onClick = { expanded = true }) {
@@ -294,7 +296,7 @@ fun getZodiac(cal: Calendar): String {
     return getZodiac(day, month)
 }
 
-// Zodiac -> drawable mapping (placeholder)
+// ИСПРАВЛЕННАЯ функция для изображений знаков зодиака
 fun getZodiacDrawableRes(zodiac: String): Int {
     return when (zodiac) {
         "Овен" -> R.drawable.img_aries
@@ -305,9 +307,9 @@ fun getZodiacDrawableRes(zodiac: String): Int {
         "Дева" -> R.drawable.img_virgo
         "Весы" -> R.drawable.img_libra
         "Скорпион" -> R.drawable.img_scorpio
-        "Стрелец" -> R.drawable.img_sagittarius
+        "Стрелец" -> R.drawable.img_sagittarius  // ← ИСПРАВЛЕНО
         "Козерог" -> R.drawable.img_capricorn
-        "Водолей" -> R.drawable.img_aquatius
+        "Водолей" -> R.drawable.img_aquarius     // ← ИСПРАВЛЕНО
         "Рыбы" -> R.drawable.img_pisces
         else -> R.drawable.ic_launcher_foreground
     }

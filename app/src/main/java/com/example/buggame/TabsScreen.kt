@@ -51,9 +51,11 @@ fun TabsScreen(modifier: Modifier = Modifier) {
             }
         }
 
-        Box(modifier = Modifier
-            .fillMaxSize()
-            .padding(12.dp)
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(12.dp)
         ) {
             when (selectedTab) {
                 0 -> RegistrationScreen(modifier = Modifier.fillMaxSize())
@@ -67,7 +69,6 @@ fun TabsScreen(modifier: Modifier = Modifier) {
 
 @Composable
 private fun RulesTab(modifier: Modifier = Modifier) {
-    // stringResource(R.string.rules_html) — убедись, что добавил/а строку в res/values/strings.xml
     val html = stringResource(id = R.string.rules_html)
     AndroidView(
         factory = { ctx ->
