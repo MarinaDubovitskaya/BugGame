@@ -1,3 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">BugGame</string>
+
+    <string name="rules_html"><![CDATA[
+<html>
+<body style="padding: 20px; font-family: Arial; background-color: #f5f5f5;">
+<h1 style="color: #4CAF50; text-align: center;">Правила игры "Жуки"</h1>
+
+<div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+<h2 style="color: #333;">🎯 Цель игры:</h2>
+<p>Наберите как можно больше очков, уничтожая насекомых, которые появляются на экране!</p>
+
+<h2 style="color: #333;">🎮 Управление:</h2>
+<ul>
+<li>🔹 Нажимайте на насекомых, чтобы уничтожить их и получить очки</li>
+<li>🔹 Старайтесь не промахиваться - за каждый промах снимаются очки</li>
+<li>🔹 Используйте паузу, если нужно сделать перерыв</li>
+</ul>
+
+<h2 style="color: #333;">💰 Система очков:</h2>
+<ul>
+<li>🐜 <b>Муравей</b>: <span style="color: green; font-weight: bold;">+10 очков</span></li>
+<li>🪲 <b>Жук</b>: <span style="color: blue; font-weight: bold;">+20 очков</span></li>
+<li>🕷️ <b>Паук</b>: <span style="color: red; font-weight: bold;">+30 очков</span></li>
+<li>❌ <b>Промах</b>: <span style="color: red; font-weight: bold;">-2 очка</span></li>
+</ul>
+
+<h2 style="color: #333;">⏱️ Длительность игры:</h2>
+<p>Каждый раунд длится <b>60 секунд</b>. Постарайтесь набрать максимум очков за это время!</p>
+
+<h2 style="color: #333;">⚙️ Уровни сложности:</h2>
+<ul>
+<li>🟢 <b>Легкий</b> (1-3) - медленные насекомые</li>
+<li>🟡 <b>Средний</b> (4-7) - нормальная скорость</li>
+<li>🔴 <b>Сложный</b> (8-10) - быстрые насекомые</li>
+</ul>
+
+<h2 style="color: #333;">💡 Советы для успеха:</h2>
+<ul>
+<li>🎯 Начинайте с легкого уровня сложности</li>
+<li>⏰ Следите за временем раунда</li>
+<li>🎮 Не торопитесь - точность важнее скорости</li>
+<li>📱 Регулируйте настройки игры под себя</li>
+<li>🏆 Регистрируйтесь для сохранения рекордов</li>
+</ul>
+</div>
+
+<div style="text-align: center; margin-top: 25px; padding: 15px; background: #E8F5E8; border-radius: 8px;">
+<p style="margin: 0; color: #2E7D32; font-weight: bold;">Удачи в игре! 🎮</p>
+<p style="margin: 5px 0 0 0; color: #666; font-size: 14px;">Разработчики: Чистых Ксения, Дубовицкая Марина</p>
+</div>
+
+</body>
+</html>
+]]></string>
+
+    <!-- Регистрация -->
+    <string name="registration_title">Регистрация игрока</string>
+    <string name="full_name">ФИО</string>
+    <string name="full_name_hint">Фамилия Имя Отчество</string>
+    <string name="gender">Пол</string>
+    <string name="male">Мужской</string>
+    <string name="female">Женский</string>
+    <string name="course">Курс</string>
+    <string name="course_hint">Выберите курс</string>
+    <string name="difficulty">Уровень сложности</string>
+    <string name="birth_date">Дата рождения</string>
+    <string name="select_date">Выбрать дату</string>
+    <string name="zodiac_sign">Знак зодиака</string>
+    <string name="register_button">Зарегистрироваться</string>
+    <string name="game_bugs_preview">В игре вас ждут:</string>
+
+    <!-- Игра -->
+    <string name="score">Очки</string>
+    <string name="misses">Промахи</string>
+    <string name="player">Игрок</string>
+    <string name="difficulty_level">Сложность</string>
+    <string name="bugs_count">Жуков</string>
+    <string name="time_left">Время</string>
+    <string name="start_game">Начать игру</string>
+    <string name="pause">Пауза</string>
+    <string name="resume">Продолжить</string>
+    <string name="new_game">Новая игра</string>
+    <string name="round_completed">Раунд завершен!</string>
+    <string name="final_score">Итоговый счет</string>
+
+    <!-- Настройки -->
+    <string name="game_settings">Настройки игры</string>
+    <string name="game_speed">Скорость игры</string>
+    <string name="max_bugs">Макс тараканов на экране</string>
+    <string name="bonus_interval">Интервал появления бонусов (сек)</string>
+    <string name="round_duration">Длительность раунда (сек)</string>
+    <string name="save_settings">Сохранить настройки</string>
+    <string name="reset_settings">Сбросить</string>
+    <string name="current_settings">Текущие настройки</string>
+
+    <!-- Вкладки -->
+    <string name="tab_registration">Регистрация</string>
+    <string name="tab_rules">Правила</string>
+    <string name="tab_authors">Авторы</string>
+    <string name="tab_settings">Настройки</string>
+    <string name="tab_game">Игра</string>
+
+    <!-- Авторы -->
+    <string name="authors_list">Список авторов</string>
+    <string name="student_info">Студент группы ИП-215</string>
+    <string name="details">Подробнее</string>
+
+    <!-- Сообщения -->
+    <string name="use_tabs_navigation">Используйте вкладки для навигации</string>
+    <string name="settings_saved">Настройки сохранены</string>
+    <string name="defaults_restored">Восстановлены значения по умолчанию</string>
+    <string name="choose_gender_and_course">Выберите пол и курс</string>
+    <string name="field_cannot_be_empty">Поле не может быть пустым</string>
+    <string name="registration_completed">Регистрация завершена!</string>
+
+    <!-- Курсы -->
+    <string name="course_1">1 курс</string>
+    <string name="course_2">2 курс</string>
+    <string name="course_3">3 курс</string>
+    <string name="course_4">4 курс</string>
+    <string name="course_5">5 курс</string>
 </resources>
