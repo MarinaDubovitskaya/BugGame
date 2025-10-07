@@ -9,7 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -38,19 +38,19 @@ data class RegisteredPlayer(
 @Composable
 fun RegistrationScreen(modifier: Modifier = Modifier) {
     // A: базовые поля
-    var name by remember { mutableStateOf("") }
-    var isNameError by remember { mutableStateOf(false) }
-    var selectedGender by remember { mutableStateOf("") }
-    var selectedCourse by remember { mutableStateOf("") }
-    var expanded by remember { mutableStateOf(false) }
-    var resultText by remember { mutableStateOf("") }
+    var name by rememberSaveable { mutableStateOf("") }
+    var isNameError by rememberSaveable { mutableStateOf(false) }
+    var selectedGender by rememberSaveable { mutableStateOf("") }
+    var selectedCourse by rememberSaveable { mutableStateOf("") }
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    var resultText by rememberSaveable { mutableStateOf("") }
 
     // B1: difficulty slider state (1..10)
-    var difficultyFloat by remember { mutableStateOf(1f) }
+    var difficultyFloat by rememberSaveable { mutableStateOf(1f) }
     val difficulty: Int = difficultyFloat.toInt()
 
     // B2: birth date state
-    var birthCalendar by remember { mutableStateOf(Calendar.getInstance()) }
+    var birthCalendar by rememberSaveable { mutableStateOf(Calendar.getInstance()) }
     // birthLabel сделаем derived (чтобы не обновлять вручную)
     val birthLabel by remember(birthCalendar) { derivedStateOf { formatDate(birthCalendar) } }
     val ctx = LocalContext.current
@@ -64,9 +64,16 @@ fun RegistrationScreen(modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .fillMaxSize()
-            .verticalScroll(scrollState)  // ← ДОБАВЛЕНО ПРОКРУТКА
+            .verticalScroll(scrollState)
             .padding(16.dp)
     ) {
+        // Заголовок
+        Text(
+            text = "Регистрация игрока",
+            style = MaterialTheme.typography.headlineMedium,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+
         // Заголовок ФИО
         Text(
             text = "ФИО",
@@ -83,7 +90,9 @@ fun RegistrationScreen(modifier: Modifier = Modifier) {
             },
             label = { Text("Фамилия Имя Отчество") },
             isError = isNameError,
-            modifier = AppStyles.textFieldModifier,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
             shape = MaterialTheme.shapes.medium
         )
         if (isNameError) {
@@ -91,11 +100,11 @@ fun RegistrationScreen(modifier: Modifier = Modifier) {
                 text = "Поле не может быть пустым",
                 color = Color.Red,
                 style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(top = 4.dp)
+                modifier = Modifier.padding(bottom = 8.dp)
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         // Пол
         Text(text = "Пол", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
@@ -127,8 +136,9 @@ fun RegistrationScreen(modifier: Modifier = Modifier) {
                 onValueChange = {},
                 readOnly = true,
                 label = { Text("Выберите курс") },
-                modifier = AppStyles.textFieldModifier
-                    .clickable { expanded = true },  // ← ИСПРАВЛЕНО: добавлен clickable
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = true },
                 shape = MaterialTheme.shapes.medium,
                 trailingIcon = {
                     IconButton(onClick = { expanded = true }) {
@@ -138,10 +148,13 @@ fun RegistrationScreen(modifier: Modifier = Modifier) {
             )
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                 courseOptions.forEach { course ->
-                    DropdownMenuItem(text = { Text(course) }, onClick = {
-                        selectedCourse = course
-                        expanded = false
-                    })
+                    DropdownMenuItem(
+                        text = { Text(course) },
+                        onClick = {
+                            selectedCourse = course
+                            expanded = false
+                        }
+                    )
                 }
             }
         }
@@ -183,18 +196,62 @@ fun RegistrationScreen(modifier: Modifier = Modifier) {
         val zodiacPreview = getZodiac(birthCalendar)
         Text(text = "Знак зодиака: $zodiacPreview", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
 
-        // B4: zodiac preview (image) — placeholder by default
+        // B4: zodiac preview (image)
         val zodiacRes = getZodiacDrawableRes(zodiacPreview)
         Image(
             painter = painterResource(id = zodiacRes),
-            contentDescription = "Знак зодиака",
+            contentDescription = "Знак зодиака: $zodiacPreview",
             modifier = Modifier
-                .size(96.dp)
+                .size(120.dp)
                 .padding(top = 8.dp)
                 .align(Alignment.CenterHorizontally)
         )
 
         Spacer(modifier = Modifier.height(16.dp))
+
+        // Предпросмотр игровых жуков
+        Text(text = "В игре вас ждут:", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            // Муравей
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Image(
+                    painter = painterResource(id = R.drawable.bug_ant),
+                    contentDescription = "Муравей - 10 очков",
+                    modifier = Modifier.size(80.dp)
+                )
+                Text("Муравей", style = MaterialTheme.typography.bodySmall)
+                Text("10 очков", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+            }
+
+            // Жук
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Image(
+                    painter = painterResource(id = R.drawable.bug_beetle),
+                    contentDescription = "Жук - 20 очков",
+                    modifier = Modifier.size(80.dp)
+                )
+                Text("Жук", style = MaterialTheme.typography.bodySmall)
+                Text("20 очков", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+            }
+
+            // Паук
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Image(
+                    painter = painterResource(id = R.drawable.bug_spider),
+                    contentDescription = "Паук - 30 очков",
+                    modifier = Modifier.size(80.dp)
+                )
+                Text("Паук", style = MaterialTheme.typography.bodySmall)
+                Text("30 очков", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
 
         // FINAL: Register button — собираем RegisteredPlayer
         Button(
@@ -217,34 +274,45 @@ fun RegistrationScreen(modifier: Modifier = Modifier) {
                     zodiac = zodiacPreview
                 )
 
+                // СОХРАНЯЕМ ИГРОКА В PlayerManager
+                PlayerManager.setPlayer(player)
+
                 resultText = """
-                    Регистрация завершена!
+                    ✅ Регистрация завершена!
+                    
                     ФИО: ${player.fullName}
                     Пол: ${player.gender}
                     Курс: ${player.course}
                     Сложность: ${player.difficulty}
                     Дата рождения: ${formatDate(player.birthDate)}
                     Знак зодиака: ${player.zodiac}
+                    
+                    Теперь можете перейти в игру!
                 """.trimIndent()
             },
-            modifier = AppStyles.buttonModifier,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
             shape = MaterialTheme.shapes.medium,
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
         ) {
-            Text("Зарегистрироваться")
+            Text("Зарегистрироваться", style = MaterialTheme.typography.bodyLarge)
         }
 
         // Результат
         if (resultText.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = resultText,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+            ) {
+                Text(
+                    text = resultText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
         }
     }
 }
@@ -296,7 +364,7 @@ fun getZodiac(cal: Calendar): String {
     return getZodiac(day, month)
 }
 
-// ИСПРАВЛЕННАЯ функция для изображений знаков зодиака
+// Функция для изображений знаков зодиака
 fun getZodiacDrawableRes(zodiac: String): Int {
     return when (zodiac) {
         "Овен" -> R.drawable.img_aries
@@ -307,9 +375,9 @@ fun getZodiacDrawableRes(zodiac: String): Int {
         "Дева" -> R.drawable.img_virgo
         "Весы" -> R.drawable.img_libra
         "Скорпион" -> R.drawable.img_scorpio
-        "Стрелец" -> R.drawable.img_sagittarius  // ← ИСПРАВЛЕНО
+        "Стрелец" -> R.drawable.img_sagittarius
         "Козерог" -> R.drawable.img_capricorn
-        "Водолей" -> R.drawable.img_aquarius     // ← ИСПРАВЛЕНО
+        "Водолей" -> R.drawable.img_aquarius
         "Рыбы" -> R.drawable.img_pisces
         else -> R.drawable.ic_launcher_foreground
     }
