@@ -18,6 +18,11 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import java.util.Calendar
 import java.util.*
 
 data class Player(
@@ -27,6 +32,7 @@ data class Player(
 )
 
 data class RegisteredPlayer(
+    val id: Long = 0,
     val fullName: String,
     val gender: String,
     val course: String,
@@ -37,6 +43,9 @@ data class RegisteredPlayer(
 
 @Composable
 fun RegistrationScreen(modifier: Modifier = Modifier) {
+    val coroutineScope = rememberCoroutineScope()
+    val allPlayers by playerRepository.getAllPlayers().collectAsState(initial = emptyList())
+
     // A: базовые поля
     var name by rememberSaveable { mutableStateOf("") }
     var isNameError by rememberSaveable { mutableStateOf(false) }
@@ -51,14 +60,12 @@ fun RegistrationScreen(modifier: Modifier = Modifier) {
 
     // B2: birth date state
     var birthCalendar by rememberSaveable { mutableStateOf(Calendar.getInstance()) }
-    // birthLabel сделаем derived (чтобы не обновлять вручную)
     val birthLabel by remember(birthCalendar) { derivedStateOf { formatDate(birthCalendar) } }
     val ctx = LocalContext.current
 
     val genderOptions = listOf("Мужской", "Женский")
     val courseOptions = listOf("1 курс", "2 курс", "3 курс", "4 курс", "5 курс")
 
-    // ДОБАВЛЕНО: состояние для прокрутки
     val scrollState = rememberScrollState()
 
     Column(
@@ -67,6 +74,42 @@ fun RegistrationScreen(modifier: Modifier = Modifier) {
             .verticalScroll(scrollState)
             .padding(16.dp)
     ) {
+        // Список существующих игроков
+        if (allPlayers.isNotEmpty()) {
+            Text(
+                "Выберите существующего игрока:",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            LazyColumn(modifier = Modifier.height(150.dp)) {
+                items(allPlayers) { player ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                            .clickable {
+                                val selectedPlayer = RegisteredPlayer(
+                                    id = player.id,
+                                    fullName = player.fullName,
+                                    gender = player.gender,
+                                    course = player.course,
+                                    difficulty = player.difficulty,
+                                    birthDate = player.birthDate.toCalendar(),
+                                    zodiac = player.zodiac
+                                )
+                                PlayerManager.setPlayer(selectedPlayer)
+                                resultText = "Выбран игрок: ${player.fullName} (Сложность: ${player.difficulty})"
+                            }
+                    ) {
+                        Text("${player.fullName} - Сложность: ${player.difficulty}", modifier = Modifier.padding(12.dp))
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        Text("Или зарегистрируйте нового:", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
+
         // Заголовок
         Text(
             text = "Регистрация игрока",
@@ -74,14 +117,12 @@ fun RegistrationScreen(modifier: Modifier = Modifier) {
             modifier = Modifier.padding(bottom = 16.dp)
         )
 
-        // Заголовок ФИО
+        // Поле ФИО
         Text(
             text = "ФИО",
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(bottom = 4.dp)
         )
-
-        // Поле ФИО
         OutlinedTextField(
             value = name,
             onValueChange = {
@@ -161,7 +202,7 @@ fun RegistrationScreen(modifier: Modifier = Modifier) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // B1: Slider (сложность)
+        // Slider (сложность)
         Text(text = "Уровень сложности: $difficulty", style = MaterialTheme.typography.titleMedium)
         Slider(
             value = difficultyFloat,
@@ -173,16 +214,14 @@ fun RegistrationScreen(modifier: Modifier = Modifier) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // B2: Date picker
+        // Date picker
         Text(text = "Дата рождения", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
         OutlinedButton(
             onClick = {
                 showDatePicker(ctx, birthCalendar) { year, month, day ->
-                    // создаём новый Calendar и присваиваем в state — это вызовет recomposition
                     birthCalendar = Calendar.getInstance().apply {
                         set(year, month, day)
                     }
-                    // birthLabel обновится автоматически (derivedStateOf)
                 }
             },
             modifier = Modifier.fillMaxWidth()
@@ -192,11 +231,11 @@ fun RegistrationScreen(modifier: Modifier = Modifier) {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // B3: zodiac preview (text)
+        // Zodiac preview (text)
         val zodiacPreview = getZodiac(birthCalendar)
         Text(text = "Знак зодиака: $zodiacPreview", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
 
-        // B4: zodiac preview (image)
+        // Zodiac preview (image)
         val zodiacRes = getZodiacDrawableRes(zodiacPreview)
         Image(
             painter = painterResource(id = zodiacRes),
@@ -209,86 +248,54 @@ fun RegistrationScreen(modifier: Modifier = Modifier) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Предпросмотр игровых жуков
-        Text(text = "В игре вас ждут:", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            // Муравей
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Image(
-                    painter = painterResource(id = R.drawable.bug_ant),
-                    contentDescription = "Муравей - 10 очков",
-                    modifier = Modifier.size(80.dp)
-                )
-                Text("Муравей", style = MaterialTheme.typography.bodySmall)
-                Text("10 очков", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-            }
-
-            // Жук
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Image(
-                    painter = painterResource(id = R.drawable.bug_beetle),
-                    contentDescription = "Жук - 20 очков",
-                    modifier = Modifier.size(80.dp)
-                )
-                Text("Жук", style = MaterialTheme.typography.bodySmall)
-                Text("20 очков", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-            }
-
-            // Паук
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Image(
-                    painter = painterResource(id = R.drawable.bug_spider),
-                    contentDescription = "Паук - 30 очков",
-                    modifier = Modifier.size(80.dp)
-                )
-                Text("Паук", style = MaterialTheme.typography.bodySmall)
-                Text("30 очков", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // FINAL: Register button — собираем RegisteredPlayer
+        // Register button
         Button(
             onClick = {
                 isNameError = name.isBlank()
-                if (isNameError) return@Button
-
-                if (selectedGender.isEmpty() || selectedCourse.isEmpty()) {
-                    // краткая валидация
-                    resultText = "Выберите пол и курс"
+                if (isNameError || selectedGender.isEmpty() || selectedCourse.isEmpty()) {
+                    resultText = "Заполните все поля"
                     return@Button
                 }
 
-                val player = RegisteredPlayer(
-                    fullName = name.trim(),
-                    gender = selectedGender,
-                    course = selectedCourse,
-                    difficulty = difficulty,
-                    birthDate = birthCalendar.clone() as Calendar,
-                    zodiac = zodiacPreview
-                )
+                coroutineScope.launch {
+                    val existing = allPlayers.find { it.fullName == name.trim() }
+                    if (existing != null) {
+                        resultText = "Игрок с таким ФИО уже существует"
+                        return@launch
+                    }
 
-                // СОХРАНЯЕМ ИГРОКА В PlayerManager
-                PlayerManager.setPlayer(player)
+                    val playerEntity = PlayerEntity(
+                        fullName = name.trim(),
+                        gender = selectedGender,
+                        course = selectedCourse,
+                        difficulty = difficulty,
+                        birthDate = birthCalendar.toMillis(),
+                        zodiac = zodiacPreview
+                    )
+                    val insertedId = playerRepository.insertPlayer(playerEntity)
 
-                resultText = """
-                    ✅ Регистрация завершена!
-                    
-                    ФИО: ${player.fullName}
-                    Пол: ${player.gender}
-                    Курс: ${player.course}
-                    Сложность: ${player.difficulty}
-                    Дата рождения: ${formatDate(player.birthDate)}
-                    Знак зодиака: ${player.zodiac}
-                    
-                    Теперь можете перейти в игру!
-                """.trimIndent()
+                    val registeredPlayer = RegisteredPlayer(
+                        id = insertedId,
+                        fullName = playerEntity.fullName,
+                        gender = playerEntity.gender,
+                        course = playerEntity.course,
+                        difficulty = playerEntity.difficulty,
+                        birthDate = birthCalendar.clone() as Calendar,
+                        zodiac = playerEntity.zodiac
+                    )
+                    PlayerManager.setPlayer(registeredPlayer)
+
+                    resultText = """
+                        ✅ Регистрация завершена! ID: $insertedId
+                        ФИО: ${registeredPlayer.fullName}
+                        Пол: ${registeredPlayer.gender}
+                        Курс: ${registeredPlayer.course}
+                        Сложность: ${registeredPlayer.difficulty}
+                        Дата рождения: ${formatDate(registeredPlayer.birthDate)}
+                        Знак зодиака: ${registeredPlayer.zodiac}
+                        Теперь можете перейти в игру!
+                    """.trimIndent()
+                }
             },
             modifier = Modifier
                 .fillMaxWidth()

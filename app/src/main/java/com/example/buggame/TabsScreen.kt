@@ -45,6 +45,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import java.text.SimpleDateFormat
+import java.util.Locale
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.produceState
 
 /**
  * TabsScreen — содержит 5 вкладок:
@@ -58,7 +62,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TabsScreen(modifier: Modifier = Modifier) {
-    val tabs = listOf("Регистрация", "Правила", "Авторы", "Настройки", "Игра")
+    val tabs = listOf("Регистрация", "Правила", "Авторы", "Настройки", "Игра", "Рекорды")
     var selectedTab by remember { mutableStateOf(0) }
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -84,6 +88,7 @@ fun TabsScreen(modifier: Modifier = Modifier) {
                 2 -> AuthorsTab(modifier = Modifier.fillMaxSize().padding(8.dp))
                 3 -> SettingsTab(modifier = Modifier.fillMaxSize().padding(8.dp))
                 4 -> GameScreen(modifier = Modifier.fillMaxSize())
+                5 -> RecordsTab(modifier = Modifier.fillMaxSize().padding(8.dp))
             }
         }
     }
@@ -247,6 +252,33 @@ private fun SettingsTab(modifier: Modifier = Modifier) {
                 Text("• Макс жуков: ${GameSettings.maxBugs}")
                 Text("• Интервал бонусов: ${GameSettings.bonusInterval.toInt()} сек")
                 Text("• Длительность раунда: ${GameSettings.roundDuration.toInt()} сек")
+            }
+        }
+    }
+}
+@Composable
+private fun RecordsTab(modifier: Modifier = Modifier) {
+    val allScores by scoreRepository.getAllScores().collectAsState(initial = emptyList())
+    val dateFormat = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
+    val playerNames by produceState<Map<Long, String>>(initialValue = emptyMap(), producer = {
+        value = allScores.associate { score ->
+            val player = playerRepository.getPlayerById(score.playerId)
+            score.playerId to (player?.fullName ?: "Неизвестный игрок")
+        }
+    })
+
+    LazyColumn(modifier = modifier) {
+        items(allScores) { score ->
+            Card(modifier = Modifier.padding(8.dp)) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Игрок: ${playerNames[score.playerId] ?: "Неизвестный игрок"}",
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text("Очки: ${score.score}")
+                    Text("Сложность: ${score.difficulty}")
+                    Text("Дата: ${dateFormat.format(score.timestamp)}")
+                }
             }
         }
     }

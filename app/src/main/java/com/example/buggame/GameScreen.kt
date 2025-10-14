@@ -42,6 +42,9 @@ import kotlin.random.Random
 // Импорт для Arrangement
 import androidx.compose.foundation.layout.Arrangement
 
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+
 enum class GameState {
     NOT_STARTED, RUNNING, PAUSED, FINISHED
 }
@@ -80,7 +83,7 @@ fun GameScreen(
 
     // Переменная для хранения времени при паузе
     var savedTime by remember { mutableStateOf(0f) }
-
+    val coroutineScope = rememberCoroutineScope()
     // Игровой цикл
     LaunchedEffect(key1 = gameState) {
         if (gameState == GameState.RUNNING) {
@@ -444,6 +447,19 @@ fun GameScreen(
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Text("Новая игра")
+                                }
+                                LaunchedEffect(Unit) {
+                                    if (score > 0 && PlayerManager.getCurrentPlayerId() > 0) {
+                                        coroutineScope.launch {
+                                            val scoreEntity = ScoreEntity(
+                                                playerId = PlayerManager.getCurrentPlayerId(),
+                                                score = score,
+                                                difficulty = playerDifficulty,
+                                                timestamp = System.currentTimeMillis()
+                                            )
+                                            scoreRepository.insertScore(scoreEntity)
+                                        }
+                                    }
                                 }
                             }
                         }

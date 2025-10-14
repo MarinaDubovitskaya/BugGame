@@ -11,11 +11,17 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
-import com.example.buggame.ui.theme.BugGameTheme
+/**import com.example.buggame.ui.theme.BugGameTheme*/
+import androidx.room.Room
+lateinit var playerRepository: PlayerRepository
+lateinit var scoreRepository: ScoreRepository
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val db = DatabaseProvider.getDatabase(this)
+        playerRepository = PlayerRepository(db.playerDao())
+        scoreRepository = ScoreRepository(db.scoreDao())
         setContent {
             BugGameTheme {
                 Scaffold { innerPadding ->

@@ -10,6 +10,7 @@ object PlayerManager {
     fun setPlayer(player: RegisteredPlayer) {
         currentPlayer = player
     }
+    fun getCurrentPlayerId(): Long = currentPlayer?.id ?: 0
 
     fun getCurrentPlayerName(): String {
         return currentPlayer?.fullName ?: "Игрок"
