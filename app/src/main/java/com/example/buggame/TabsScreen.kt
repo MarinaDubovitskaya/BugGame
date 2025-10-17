@@ -49,6 +49,11 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import android.util.Log
+
+
 
 /**
  * TabsScreen — содержит 5 вкладок:
@@ -260,12 +265,18 @@ private fun SettingsTab(modifier: Modifier = Modifier) {
 private fun RecordsTab(modifier: Modifier = Modifier) {
     val allScores by scoreRepository.getAllScores().collectAsState(initial = emptyList())
     val dateFormat = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
-    val playerNames by produceState<Map<Long, String>>(initialValue = emptyMap(), producer = {
-        value = allScores.associate { score ->
-            val player = playerRepository.getPlayerById(score.playerId)
-            score.playerId to (player?.fullName ?: "Неизвестный игрок")
+    val coroutineScope = rememberCoroutineScope()
+    val playerNames by produceState<Map<Long, String>>(initialValue = emptyMap(), key1 = allScores) {
+        val map = mutableMapOf<Long, String>()
+        coroutineScope.launch {
+            allScores.forEach { score ->
+                val player = playerRepository.getPlayerById(score.playerId)
+                map[score.playerId] = player?.fullName ?: "Неизвестный игрок"
+                Log.d("RecordsTab", "Mapped ${score.playerId} to ${player?.fullName ?: "null"}")
+            }
+            value = map
         }
-    })
+    }
 
     LazyColumn(modifier = modifier) {
         items(allScores) { score ->
