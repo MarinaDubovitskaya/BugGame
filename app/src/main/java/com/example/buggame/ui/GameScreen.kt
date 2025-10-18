@@ -1,4 +1,4 @@
-package com.example.buggame
+package com.example.buggame.ui
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -44,6 +44,11 @@ import androidx.compose.foundation.layout.Arrangement
 
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
+import com.example.buggame.GameSettings
+import com.example.buggame.utils.PlayerManager
+import com.example.buggame.R
+import com.example.buggame.model.ScoreEntity
+import com.example.buggame.scoreRepository
 
 enum class GameState {
     NOT_STARTED, RUNNING, PAUSED, FINISHED

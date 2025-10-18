@@ -1,4 +1,4 @@
-package com.example.buggame
+package com.example.buggame.ui
 
 import android.app.DatePickerDialog
 import androidx.compose.foundation.Image
@@ -20,10 +20,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
+import com.example.buggame.model.PlayerEntity
+import kotlinx.coroutines.launch
 import java.util.Calendar
 import java.util.*
+import com.example.buggame.model.toCalendar
+import com.example.buggame.model.toMillis
+import com.example.buggame.utils.PlayerManager
+import com.example.buggame.ui.theme.BugGameTheme  // Add this import for BugGameTheme
+
 
 data class Player(
     val fullName: String,
@@ -44,7 +50,7 @@ data class RegisteredPlayer(
 @Composable
 fun RegistrationScreen(modifier: Modifier = Modifier) {
     val coroutineScope = rememberCoroutineScope()
-    val allPlayers by playerRepository.getAllPlayers().collectAsState(initial = emptyList())
+    val allPlayers by _root_ide_package_.com.example.buggame.playerRepository.getAllPlayers().collectAsState(initial = emptyList())
 
     // A: базовые поля
     var name by rememberSaveable { mutableStateOf("") }
@@ -272,7 +278,7 @@ fun RegistrationScreen(modifier: Modifier = Modifier) {
                         birthDate = birthCalendar.toMillis(),
                         zodiac = zodiacPreview
                     )
-                    val insertedId = playerRepository.insertPlayer(playerEntity)
+                    val insertedId = _root_ide_package_.com.example.buggame.playerRepository.insertPlayer(playerEntity)
 
                     val registeredPlayer = RegisteredPlayer(
                         id = insertedId,
@@ -374,26 +380,26 @@ fun getZodiac(cal: Calendar): String {
 // Функция для изображений знаков зодиака
 fun getZodiacDrawableRes(zodiac: String): Int {
     return when (zodiac) {
-        "Овен" -> R.drawable.img_aries
-        "Телец" -> R.drawable.img_taurus
-        "Близнецы" -> R.drawable.img_gemini
-        "Рак" -> R.drawable.img_cancer
-        "Лев" -> R.drawable.img_leo
-        "Дева" -> R.drawable.img_virgo
-        "Весы" -> R.drawable.img_libra
-        "Скорпион" -> R.drawable.img_scorpio
-        "Стрелец" -> R.drawable.img_sagittarius
-        "Козерог" -> R.drawable.img_capricorn
-        "Водолей" -> R.drawable.img_aquarius
-        "Рыбы" -> R.drawable.img_pisces
-        else -> R.drawable.ic_launcher_foreground
+        "Овен" -> _root_ide_package_.com.example.buggame.R.drawable.img_aries
+        "Телец" -> _root_ide_package_.com.example.buggame.R.drawable.img_taurus
+        "Близнецы" -> _root_ide_package_.com.example.buggame.R.drawable.img_gemini
+        "Рак" -> _root_ide_package_.com.example.buggame.R.drawable.img_cancer
+        "Лев" -> _root_ide_package_.com.example.buggame.R.drawable.img_leo
+        "Дева" -> _root_ide_package_.com.example.buggame.R.drawable.img_virgo
+        "Весы" -> _root_ide_package_.com.example.buggame.R.drawable.img_libra
+        "Скорпион" -> _root_ide_package_.com.example.buggame.R.drawable.img_scorpio
+        "Стрелец" -> _root_ide_package_.com.example.buggame.R.drawable.img_sagittarius
+        "Козерог" -> _root_ide_package_.com.example.buggame.R.drawable.img_capricorn
+        "Водолей" -> _root_ide_package_.com.example.buggame.R.drawable.img_aquarius
+        "Рыбы" -> _root_ide_package_.com.example.buggame.R.drawable.img_pisces
+        else -> _root_ide_package_.com.example.buggame.R.drawable.ic_launcher_foreground
     }
 }
 
 @Preview(showBackground = true)
 @Composable
 fun RegistrationScreenPreview() {
-    BugGameTheme {
+    BugGameTheme {  // Updated to use the imported BugGameTheme
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background

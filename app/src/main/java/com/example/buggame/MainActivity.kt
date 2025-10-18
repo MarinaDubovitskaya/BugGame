@@ -11,8 +11,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
-/**import com.example.buggame.ui.theme.BugGameTheme*/
-import androidx.room.Room
+import com.example.buggame.data.DatabaseProvider
+import com.example.buggame.data.PlayerRepository
+import com.example.buggame.data.ScoreRepository
+import com.example.buggame.ui.theme.BugGameTheme
+import com.example.buggame.ui.TabsScreen
+
 lateinit var playerRepository: PlayerRepository
 lateinit var scoreRepository: ScoreRepository
 

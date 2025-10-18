@@ -1,4 +1,4 @@
-package com.example.buggame
+package com.example.buggame.ui
 
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -45,15 +45,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import java.text.SimpleDateFormat
-import java.util.Locale
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
 import android.util.Log
-
-
+import kotlinx.coroutines.launch
+import kotlin.text.format
+import java.text.SimpleDateFormat
+import java.util.Locale
+import com.example.buggame.GameSettings
+import com.example.buggame.R
+import com.example.buggame.playerRepository
+import com.example.buggame.scoreRepository
 
 /**
  * TabsScreen — содержит 5 вкладок:
