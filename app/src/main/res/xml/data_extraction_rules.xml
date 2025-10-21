@@ -5,6 +5,7 @@
 -->
 <data-extraction-rules>
     <cloud-backup>
+        <include domain="database" path="buggame_database.db"/>
         <!-- TODO: Use <include> and <exclude> to control what is backed up.
         <include .../>
         <exclude .../>
@@ -16,4 +17,7 @@
         <exclude .../>
     </device-transfer>
     -->
+    <device-transfer>
+        <include domain="database" path="buggame_database.db"/>
+    </device-transfer>
 </data-extraction-rules>

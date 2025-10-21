@@ -64,4 +64,11 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.androidx.core.ktx) // Для сенсоров
+    implementation(libs.androidx.lifecycle.runtime.ktx) // Для lifecycle
+    implementation(libs.androidx.media)
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.converter)
+    implementation(libs.koin.android)
+    implementation(libs.koin.androidx.compose)
 }
