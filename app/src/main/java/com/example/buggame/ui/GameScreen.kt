@@ -21,6 +21,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,6 +51,14 @@ import com.example.buggame.R
 import com.example.buggame.model.ScoreEntity
 import com.example.buggame.scoreRepository
 
+// Новые импорты для сенсора и звука
+import android.content.Context
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+import android.media.MediaPlayer
+
 enum class GameState {
     NOT_STARTED, RUNNING, PAUSED, FINISHED
 }
@@ -57,6 +66,13 @@ enum class GameState {
 enum class BugType {
     ANT, BEETLE, SPIDER
 }
+
+data class VisualBonus(
+    val id: Int,
+    val x: Float,
+    val y: Float,
+    var lifetime: Float = 5f  // 5 секунд жизни бонуса
+)
 
 @Composable
 fun GameScreen(
@@ -74,6 +90,39 @@ fun GameScreen(
     var misses by remember { mutableStateOf(0) }
     var lastBugId by remember { mutableStateOf(0) }
 
+    // Бонусы
+    var bonuses by remember { mutableStateOf(emptyList<VisualBonus>()) }
+    var lastBonusId by remember { mutableStateOf(0) }
+    var lastBonusSpawnTime by remember { mutableStateOf(0f) }
+    var elapsedTime by remember { mutableStateOf(0f) }
+
+    // Гравитация
+    var gravityEnabled by remember { mutableStateOf(false) }
+    var gravityX by remember { mutableStateOf(0f) }
+    var gravityY by remember { mutableStateOf(0f) }
+
+    val sensorManager = ctx.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+    val accelerometer: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+
+    // Регистрация слушателя сенсора
+    DisposableEffect(gameState) {
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent?) {
+                event?.let {
+                    gravityX = -it.values[0] / SensorManager.GRAVITY_EARTH  // Направление
+                    gravityY = it.values[1] / SensorManager.GRAVITY_EARTH
+                }
+            }
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+        }
+        if (gameState == GameState.RUNNING) {
+            sensorManager.registerListener(listener, accelerometer, SensorManager.SENSOR_DELAY_GAME)
+        }
+        onDispose {
+            sensorManager.unregisterListener(listener)
+        }
+    }
+
     // Используем настройки напрямую из GameSettings
     var roundTimeLeft by remember { mutableStateOf(GameSettings.roundDuration) }
     var showHitEffect by remember { mutableStateOf<Int?>(null) }
@@ -82,6 +131,7 @@ fun GameScreen(
     val actualGameSpeed = GameSettings.gameSpeed
     val actualMaxBugs = GameSettings.maxBugs
     val actualRoundDuration = GameSettings.roundDuration
+    val actualBonusInterval = 15f  // Задано 15 секунд, но можно использовать GameSettings.bonusInterval
 
     // Отладочная информация
     var debugInfo by remember { mutableStateOf("") }
@@ -98,6 +148,9 @@ fun GameScreen(
                 savedTime = 0f
             } else {
                 roundTimeLeft = actualRoundDuration
+                elapsedTime = 0f
+                lastBonusSpawnTime = 0f
+                gravityEnabled = false
             }
 
             debugInfo = "Игра началась. Сложность: $playerDifficulty, Макс жуков: $actualMaxBugs"
@@ -107,18 +160,46 @@ fun GameScreen(
                 if (gameState != GameState.RUNNING) break
 
                 roundTimeLeft -= 0.016f
+                elapsedTime += 0.016f
 
                 if (roundTimeLeft <= 0) {
                     gameState = GameState.FINISHED
                     break
                 }
 
-                // Обновляем позиции жуков с учетом скорости игры
+                // Появление бонуса каждые 15 секунд
+                if (elapsedTime - lastBonusSpawnTime >= actualBonusInterval) {
+                    lastBonusId++
+                    val newBonus = VisualBonus(
+                        id = lastBonusId,
+                        x = Random.nextFloat() * 0.8f + 0.1f,
+                        y = Random.nextFloat() * 0.8f + 0.1f
+                    )
+                    bonuses = bonuses + newBonus
+                    lastBonusSpawnTime = elapsedTime
+                    debugInfo = "Бонус появился! ID: $lastBonusId"
+                }
+
+                // Обновление lifetime бонусов и удаление истекших
+                bonuses = bonuses.map { bonus ->
+                    bonus.copy(lifetime = bonus.lifetime - 0.016f)
+                }.filter { it.lifetime > 0 }
+
+                // Обновляем позиции жуков с учетом скорости игры и гравитации
                 bugs = bugs.map { bug ->
-                    var newX = bug.x + bug.speedX * actualGameSpeed
-                    var newY = bug.y + bug.speedY * actualGameSpeed
-                    var newSpeedX = bug.speedX
-                    var newSpeedY = bug.speedY
+                    var accelX = 0f
+                    var accelY = 0f
+                    if (gravityEnabled) {
+                        accelX = gravityX * 0.05f  // Масштаб ускорения, можно настроить
+                        accelY = gravityY * 0.05f
+                    }
+
+                    var newSpeedX = bug.speedX + accelX
+                    var newSpeedY = bug.speedY + accelY
+
+                    var newX = bug.x + newSpeedX * actualGameSpeed
+                    var newY = bug.y + newSpeedY * actualGameSpeed
+                    var newRotation = bug.rotation + bug.rotationSpeed
 
                     // Отскок от границ с небольшим случайным изменением
                     if (newX < 0.02f || newX > 0.98f) {
@@ -133,7 +214,7 @@ fun GameScreen(
                         y = newY.coerceIn(0.02f, 0.98f),
                         speedX = newSpeedX,
                         speedY = newSpeedY,
-                        rotation = bug.rotation + bug.rotationSpeed
+                        rotation = newRotation
                     )
                 }
 
@@ -211,10 +292,39 @@ fun GameScreen(
                         score += points
                         bugs = bugs.filter { it.id != bug.id }
                         showHitEffect = bug.id
-                        debugInfo = "Попадание! +$points очков. Осталось жуков: ${bugs.size - 1}"
+                        debugInfo = "Попадание! +$points очков. Осталось жуков: ${bugs.size}"
                     }
                 }
             )
+        }
+
+        // Отображение бонусов
+        bonuses.forEach { bonus ->
+            Box(
+                modifier = Modifier
+                    .offset(
+                        x = (bonus.x * ctx.resources.displayMetrics.widthPixels - 50).dp,
+                        y = (bonus.y * ctx.resources.displayMetrics.heightPixels - 50).dp
+                    )
+                    .size(100.dp)
+                    .clickable {
+                        if (gameState == GameState.RUNNING) {
+                            bonuses = bonuses.filter { it.id != bonus.id }
+                            gravityEnabled = true
+                            // Воспроизведение звука "крика жуков"
+                            val mp = MediaPlayer.create(ctx, R.raw.bug_scream)  // Требуется добавить ресурс raw/bug_scream
+                            mp.start()
+                            debugInfo = "Бонус активирован! Гравитация включена с звуком крика жуков."
+                        }
+                    }
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.bonus_icon),  // Требуется добавить drawable/bonus_icon
+                    contentDescription = "Бонус",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit
+                )
+            }
         }
 
         // Эффект попадания
@@ -292,6 +402,11 @@ fun GameScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = Color.White
                     )
+                    Text(
+                        text = "Гравитация: ${if (gravityEnabled) "Вкл" else "Выкл"}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White
+                    )
                     // Отладочная информация
                     if (debugInfo.isNotEmpty()) {
                         Text(
@@ -339,6 +454,7 @@ fun GameScreen(
                                         score = 0
                                         misses = 0
                                         bugs = emptyList()
+                                        bonuses = emptyList()
                                         savedTime = 0f
                                         debugInfo = "Новая игра"
                                     },
@@ -367,6 +483,7 @@ fun GameScreen(
                                 score = 0
                                 misses = 0
                                 bugs = emptyList()
+                                bonuses = emptyList()
                                 lastBugId = 0
                                 savedTime = 0f
                                 debugInfo = "Новая игра. Сложность: $playerDifficulty, Макс жуков: $actualMaxBugs"
@@ -447,6 +564,7 @@ fun GameScreen(
                                         score = 0
                                         misses = 0
                                         bugs = emptyList()
+                                        bonuses = emptyList()
                                         savedTime = 0f
                                     },
                                     modifier = Modifier.fillMaxWidth()

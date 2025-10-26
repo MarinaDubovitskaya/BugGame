@@ -15,6 +15,6 @@ data class PlayerEntity(
     val zodiac: String
 )
 
-// Конвертеры для Calendar <-> Long (используем в Database)
+
 fun Calendar.toMillis(): Long = this.timeInMillis
 fun Long.toCalendar(): Calendar = Calendar.getInstance().apply { timeInMillis = this@toCalendar }

@@ -7,18 +7,25 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.lifecycle.ViewModel
 import com.example.buggame.data.DatabaseProvider
 import com.example.buggame.data.PlayerRepository
 import com.example.buggame.data.ScoreRepository
-import com.example.buggame.ui.theme.BugGameTheme
 import com.example.buggame.ui.TabsScreen
+import com.example.buggame.ui.theme.BugGameTheme
+import org.koin.android.ext.koin.androidContext
+import org.koin.androidx.viewmodel.dsl.viewModel
+import org.koin.core.context.startKoin
+import org.koin.dsl.module
 
 lateinit var playerRepository: PlayerRepository
 lateinit var scoreRepository: ScoreRepository
+
+class GameViewModel : ViewModel() {
+    // Add any necessary logic here if needed
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -26,6 +33,18 @@ class MainActivity : ComponentActivity() {
         val db = DatabaseProvider.getDatabase(this)
         playerRepository = PlayerRepository(db.playerDao())
         scoreRepository = ScoreRepository(db.scoreDao())
+
+        startKoin {
+            androidContext(this@MainActivity)
+            modules(
+                module {
+                    single { playerRepository }
+                    single { scoreRepository }
+                    viewModel { GameViewModel() }
+                }
+            )
+        }
+
         setContent {
             BugGameTheme {
                 Scaffold { innerPadding ->
@@ -38,22 +57,5 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-    }
-}
-
-
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    BugGameTheme {
-        Greeting("Android")
     }
 }
