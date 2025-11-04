@@ -2,31 +2,11 @@ package com.example.buggame.ui
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.clickable
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
@@ -39,10 +19,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlin.random.Random
-
-// Импорт для Arrangement
-import androidx.compose.foundation.layout.Arrangement
-
+import kotlin.math.abs
+import kotlin.math.hypot
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 import com.example.buggame.GameSettings
@@ -50,39 +28,78 @@ import com.example.buggame.utils.PlayerManager
 import com.example.buggame.R
 import com.example.buggame.model.ScoreEntity
 import com.example.buggame.scoreRepository
-
-// Новые импорты для сенсора и звука
 import android.content.Context
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.media.MediaPlayer
+import org.koin.androidx.compose.getViewModel
+import kotlin.math.roundToInt
+import android.util.Log
 
-enum class GameState {
-    NOT_STARTED, RUNNING, PAUSED, FINISHED
-}
 
-enum class BugType {
-    ANT, BEETLE, SPIDER
-}
+
+enum class GameState { NOT_STARTED, RUNNING, PAUSED, FINISHED }
+enum class BugType { ANT, BEETLE, SPIDER, GOLD }
 
 data class VisualBonus(
     val id: Int,
     val x: Float,
     val y: Float,
-    var lifetime: Float = 5f  // 5 секунд жизни бонуса
+    var lifetime: Float = 5f
 )
 
+data class HitEffect(val id: Int, val x: Float, val y: Float, val points: Int)
+// --- Надёжный расчёт очков за GOLD-насекомое (поддержка 1..10 уровней) ---
+fun computeGoldPointsRobust(goldRate: Double, playerDifficulty: Int): Int {
+    // goldRate ожидается в рублях (RUB/г). Если у вас цена в RUB/oz — установите isPerOunce = true
+    val isPerOunce = false
+
+    // Настройка шкалы — если необходимо, отрегулируешь divisor
+    var divisor = 1000.0  // чем меньше — тем больше очков
+
+    // Мультипликатор сложности для 1..10 (увеличивает очки с ростом уровня)
+    val difficultyMultiplier = when (playerDifficulty.coerceIn(1, 10)) {
+        1 -> 0.5
+        2 -> 0.8
+        3 -> 1.0
+        4 -> 1.2
+        5 -> 1.5
+        6 -> 1.8
+        7 -> 2.1
+        8 -> 2.4
+        9 -> 2.8
+        10 -> 3.2
+        else -> 1.0
+    }
+
+    val ratePerGram = if (isPerOunce) {
+        // 1 troy oz = 31.1034768 g
+        goldRate / 31.1034768
+    } else {
+        goldRate
+    }
+
+    val safeRate = if (ratePerGram.isFinite() && ratePerGram > 0.0) ratePerGram else 0.0
+
+    val raw = (safeRate / divisor) * difficultyMultiplier
+    val pts = raw.roundToInt().coerceAtLeast(1) // минимум 1 очко
+
+    Log.d("GoldPoints", "goldRate=$goldRate ratePerGram=$ratePerGram divisor=$divisor difficulty=$playerDifficulty mult=$difficultyMultiplier -> raw=$raw pts=$pts")
+
+    return pts
+}
+
 @Composable
-fun GameScreen(
-    modifier: Modifier = Modifier
-) {
+fun GameScreen(modifier: Modifier = Modifier) {
     val ctx = LocalContext.current
     val currentPlayer = PlayerManager.getCurrentPlayerName()
-
-    // Получаем сложность из регистрации
     val playerDifficulty = remember { PlayerManager.getCurrentPlayerDifficulty() }
+
+    // Получаем GameViewModel из Koin
+    val viewModel: GameViewModel = getViewModel()
+    val goldRate by viewModel.goldRate.collectAsState()
 
     var score by remember { mutableStateOf(0) }
     var gameState by remember { mutableStateOf(GameState.NOT_STARTED) }
@@ -90,378 +107,308 @@ fun GameScreen(
     var misses by remember { mutableStateOf(0) }
     var lastBugId by remember { mutableStateOf(0) }
 
+    // Золотой таракан
+    var lastGoldBugSpawnTime by remember { mutableStateOf(0f) }
+
     // Бонусы
     var bonuses by remember { mutableStateOf(emptyList<VisualBonus>()) }
     var lastBonusId by remember { mutableStateOf(0) }
     var lastBonusSpawnTime by remember { mutableStateOf(0f) }
+    var lastBugSpawnTime by remember { mutableStateOf(0f) }
     var elapsedTime by remember { mutableStateOf(0f) }
 
     // Гравитация
     var gravityEnabled by remember { mutableStateOf(false) }
+    var gravityTimer by remember { mutableStateOf(0f) }
     var gravityX by remember { mutableStateOf(0f) }
     var gravityY by remember { mutableStateOf(0f) }
 
     val sensorManager = ctx.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     val accelerometer: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+    val goldText = if (goldRate <= 0.0) "N/A" else "%.2f".format(goldRate)
 
-    // Регистрация слушателя сенсора
+
     DisposableEffect(gameState) {
         val listener = object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent?) {
                 event?.let {
-                    gravityX = -it.values[0] / SensorManager.GRAVITY_EARTH  // Направление
+                    gravityX = -it.values[0] / SensorManager.GRAVITY_EARTH
                     gravityY = it.values[1] / SensorManager.GRAVITY_EARTH
                 }
             }
             override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
         }
         if (gameState == GameState.RUNNING) {
-            sensorManager.registerListener(listener, accelerometer, SensorManager.SENSOR_DELAY_GAME)
+            accelerometer?.let { sensorManager.registerListener(listener, it, SensorManager.SENSOR_DELAY_GAME) }
         }
         onDispose {
             sensorManager.unregisterListener(listener)
         }
     }
 
-    // Используем настройки напрямую из GameSettings
     var roundTimeLeft by remember { mutableStateOf(GameSettings.roundDuration) }
-    var showHitEffect by remember { mutableStateOf<Int?>(null) }
+    var hitEffect by remember { mutableStateOf<HitEffect?>(null) }
 
-    // Получаем актуальные настройки
     val actualGameSpeed = GameSettings.gameSpeed
     val actualMaxBugs = GameSettings.maxBugs
     val actualRoundDuration = GameSettings.roundDuration
-    val actualBonusInterval = 15f  // Задано 15 секунд, но можно использовать GameSettings.bonusInterval
+    val actualBonusInterval = GameSettings.bonusInterval
 
-    // Отладочная информация
     var debugInfo by remember { mutableStateOf("") }
-
-    // Переменная для хранения времени при паузе
     var savedTime by remember { mutableStateOf(0f) }
     val coroutineScope = rememberCoroutineScope()
-    // Игровой цикл
-    LaunchedEffect(key1 = gameState) {
-        if (gameState == GameState.RUNNING) {
-            // Если была пауза, восстанавливаем время, иначе начинаем заново
-            if (savedTime > 0) {
-                roundTimeLeft = savedTime
-                savedTime = 0f
-            } else {
-                roundTimeLeft = actualRoundDuration
-                elapsedTime = 0f
-                lastBonusSpawnTime = 0f
-                gravityEnabled = false
-            }
 
-            debugInfo = "Игра началась. Сложность: $playerDifficulty, Макс жуков: $actualMaxBugs"
+    val bugSizeDp = 100f
+    val bugHalfSizeDp = bugSizeDp / 2f
 
-            while (true) {
-                delay(16) // 60 FPS для плавной анимации
-                if (gameState != GameState.RUNNING) break
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val screenWidth = maxWidth.value
+        val screenHeight = maxHeight.value
 
-                roundTimeLeft -= 0.016f
-                elapsedTime += 0.016f
+        val topUiHeightEstimate = 200f
+        val minX = bugHalfSizeDp / screenWidth
+        val maxX = 1f - bugHalfSizeDp / screenWidth
+        val minY = (bugHalfSizeDp + topUiHeightEstimate) / screenHeight
+        val maxY = 1f - bugHalfSizeDp / screenHeight
 
-                if (roundTimeLeft <= 0) {
-                    gameState = GameState.FINISHED
-                    break
+        LaunchedEffect(key1 = gameState) {
+            if (gameState == GameState.RUNNING) {
+                if (savedTime > 0) {
+                    roundTimeLeft = savedTime
+                    savedTime = 0f
+                } else {
+                    roundTimeLeft = actualRoundDuration
+                    elapsedTime = 0f
+                    lastBonusSpawnTime = 0f
+                    lastBugSpawnTime = 0f
+                    lastGoldBugSpawnTime = 0f
+                    gravityEnabled = false
                 }
 
-                // Появление бонуса каждые 15 секунд
-                if (elapsedTime - lastBonusSpawnTime >= actualBonusInterval) {
-                    lastBonusId++
-                    val newBonus = VisualBonus(
-                        id = lastBonusId,
-                        x = Random.nextFloat() * 0.8f + 0.1f,
-                        y = Random.nextFloat() * 0.8f + 0.1f
-                    )
-                    bonuses = bonuses + newBonus
-                    lastBonusSpawnTime = elapsedTime
-                    debugInfo = "Бонус появился! ID: $lastBonusId"
-                }
+                debugInfo = "Игра началась. Сложность: $playerDifficulty, Макс жуков: $actualMaxBugs"
 
-                // Обновление lifetime бонусов и удаление истекших
-                bonuses = bonuses.map { bonus ->
-                    bonus.copy(lifetime = bonus.lifetime - 0.016f)
-                }.filter { it.lifetime > 0 }
+                while (true) {
+                    delay(16)
+                    if (gameState != GameState.RUNNING) break
 
-                // Обновляем позиции жуков с учетом скорости игры и гравитации
-                bugs = bugs.map { bug ->
-                    var accelX = 0f
-                    var accelY = 0f
+                    roundTimeLeft -= 0.016f
+                    elapsedTime += 0.016f
+
+                    if (roundTimeLeft <= 0) {
+                        gameState = GameState.FINISHED
+                        break
+                    }
+
+                    // завершение гравитации
                     if (gravityEnabled) {
-                        accelX = gravityX * 0.05f  // Масштаб ускорения, можно настроить
-                        accelY = gravityY * 0.05f
+                        gravityTimer -= 0.016f
+                        if (gravityTimer <= 0f) {
+                            gravityEnabled = false
+                            bugs = bugs.map { b ->
+                                val factorX = 0.9f + Random.nextFloat() * 0.2f
+                                val factorY = 0.9f + Random.nextFloat() * 0.2f
+                                b.copy(speedX = b.baseSpeedX * factorX, speedY = b.baseSpeedY * factorY)
+                            }
+                            debugInfo = "Гравитация завершена"
+                        }
                     }
 
-                    var newSpeedX = bug.speedX + accelX
-                    var newSpeedY = bug.speedY + accelY
-
-                    var newX = bug.x + newSpeedX * actualGameSpeed
-                    var newY = bug.y + newSpeedY * actualGameSpeed
-                    var newRotation = bug.rotation + bug.rotationSpeed
-
-                    // Отскок от границ с небольшим случайным изменением
-                    if (newX < 0.02f || newX > 0.98f) {
-                        newSpeedX = -newSpeedX * (0.9f + Random.nextFloat() * 0.2f)
+                    // бонусы по таймеру
+                    if (elapsedTime - lastBonusSpawnTime >= actualBonusInterval) {
+                        lastBonusId++
+                        val newBonus = VisualBonus(
+                            id = lastBonusId,
+                            x = Random.nextFloat() * (maxX - minX) + minX,
+                            y = Random.nextFloat() * (maxY - minY) + minY
+                        )
+                        bonuses = bonuses + newBonus
+                        lastBonusSpawnTime = elapsedTime
                     }
-                    if (newY < 0.02f || newY > 0.98f) {
-                        newSpeedY = -newSpeedY * (0.9f + Random.nextFloat() * 0.2f)
-                    }
+                    bonuses = bonuses.map { it.copy(lifetime = it.lifetime - 0.016f) }.filter { it.lifetime > 0 }
 
-                    bug.copy(
-                        x = newX.coerceIn(0.02f, 0.98f),
-                        y = newY.coerceIn(0.02f, 0.98f),
-                        speedX = newSpeedX,
-                        speedY = newSpeedY,
-                        rotation = newRotation
-                    )
-                }
-
-                // ИСПРАВЛЕННАЯ ЛОГИКА ПОЯВЛЕНИЯ ЖУКОВ
-                if (bugs.size < actualMaxBugs) {
-                    // Увеличиваем шанс появления и делаем его более предсказуемым
-                    val spawnChance = when {
-                        bugs.isEmpty() -> 0.3f // Если жуков нет, высокий шанс появления
-                        bugs.size < actualMaxBugs / 2 -> 0.1f
-                        else -> 0.05f
-                    }
-
-                    if (Random.nextFloat() < spawnChance) {
+                    // спавн обычных жуков по таймеру
+                    val bugSpawnInterval = 0.5f
+                    if (elapsedTime - lastBugSpawnTime >= bugSpawnInterval && bugs.count { it.type != BugType.GOLD } < actualMaxBugs) {
                         lastBugId++
-                        val newBug = createRandomVisualBug(lastBugId, playerDifficulty, actualGameSpeed)
+                        val newBug = createRandomVisualBug(lastBugId, playerDifficulty, actualGameSpeed, minX, maxX, minY, maxY)
                         bugs = bugs + newBug
-                        debugInfo = "Создан жук #$lastBugId. Всего: ${bugs.size}/$actualMaxBugs"
+                        lastBugSpawnTime = elapsedTime
                     }
+
+                    // === спавн золотого таракана каждые 20 секунд ===
+                    val goldInterval = 20f
+                    if (elapsedTime - lastGoldBugSpawnTime >= goldInterval) {
+                        lastBugId++
+                        val gold = createGoldBug(lastBugId, actualGameSpeed, minX, maxX, minY, maxY)
+                        bugs = bugs + gold
+                        lastGoldBugSpawnTime = elapsedTime
+                        debugInfo = "Появился золотой таракан (курс=${"%.2f".format(goldRate)} RUB)"
+                    }
+
+                    // обновляем позиции жуков
+                    bugs = bugs.map { bug ->
+                        var accelX = 0f
+                        var accelY = 0f
+                        if (gravityEnabled) {
+                            accelX = gravityX * 0.005f
+                            accelY = gravityY * 0.005f
+                        }
+
+                        var newSpeedX = bug.speedX + accelX
+                        var newSpeedY = bug.speedY + accelY
+
+                        if (gravityEnabled) {
+                            newSpeedX *= 0.999f
+                            newSpeedY *= 0.999f
+                        }
+
+                        val maxSpeed = if (bug.type == BugType.GOLD) 0.04f else 0.08f
+                        newSpeedX = newSpeedX.coerceIn(-maxSpeed, maxSpeed)
+                        newSpeedY = newSpeedY.coerceIn(-maxSpeed, maxSpeed)
+
+                        var newX = bug.x + newSpeedX * actualGameSpeed
+                        var newY = bug.y + newSpeedY * actualGameSpeed
+                        var newRotation = bug.rotation + bug.rotationSpeed
+
+                        if (newX < minX || newX > maxX) {
+                            newSpeedX = -newSpeedX * (0.95f + Random.nextFloat() * 0.05f)
+                            newX = newX.coerceIn(minX, maxX)
+                        }
+                        if (newY < minY || newY > maxY) {
+                            newSpeedY = -newSpeedY * (0.95f + Random.nextFloat() * 0.05f)
+                            newY = newY.coerceIn(minY, maxY)
+                        }
+
+                        bug.copy(
+                            x = newX.coerceIn(minX, maxX),
+                            y = newY.coerceIn(minY, maxY),
+                            speedX = newSpeedX,
+                            speedY = newSpeedY,
+                            rotation = newRotation
+                        )
+                    }
+
+                    // (опционально) отладочная информация — обновляем редко
+                    val avgSpeed = if (bugs.isNotEmpty()) bugs.map { hypot(it.speedX.toDouble(), it.speedY.toDouble()) }.average() else 0.0
+                    if (elapsedTime.toInt() % 5 == 0) debugInfo = "Багов:${bugs.size} avgSpeed=${"%.4f".format(avgSpeed)}"
                 }
+            } else if (gameState == GameState.PAUSED) {
+                savedTime = roundTimeLeft
             }
-        } else if (gameState == GameState.PAUSED) {
-            // Сохраняем текущее время при паузе
-            savedTime = roundTimeLeft
         }
-    }
 
-    // Эффект для анимации попадания
-    LaunchedEffect(key1 = showHitEffect) {
-        showHitEffect?.let {
-            delay(300)
-            showHitEffect = null
+        // анимация попадания
+        LaunchedEffect(key1 = hitEffect) {
+            hitEffect?.let {
+                delay(300)
+                hitEffect = null
+            }
         }
-    }
 
-    Box(modifier = modifier.fillMaxSize()) {
-        // КРАСИВЫЙ СИНЕ-ГОЛУБОЙ ГРАДИЕНТ
+        // фон
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     brush = Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFF1A2980),
-                            Color(0xFF26D0CE),
-                            Color(0xFF1A2980)
-                        )
+                        colors = listOf(Color(0xFF1A2980), Color(0xFF26D0CE), Color(0xFF1A2980))
                     )
                 )
         )
 
-        // Область для промахов ПОД жуками
+        // область промаха
         if (gameState == GameState.RUNNING) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clickable {
-                        misses++
-                        score = (score - 2).coerceAtLeast(0)
-                        debugInfo = "Промах! Очки: $score, Промахи: $misses"
-                    }
-            )
+            Box(modifier = Modifier.fillMaxSize().clickable {
+                misses++
+                score = (score - 2).coerceAtLeast(0)
+                debugInfo = "Промах! $score"
+            })
         }
 
-        // Отображение жуков
+        // отображение жуков
         bugs.forEach { bug ->
             VisualBugItem(
                 bug = bug,
+                screenWidth = screenWidth,
+                screenHeight = screenHeight,
+                bugHalfSizeDp = bugHalfSizeDp,
                 onClick = {
                     if (gameState == GameState.RUNNING) {
                         val points = when (bug.type) {
                             BugType.ANT -> 10
                             BugType.BEETLE -> 20
                             BugType.SPIDER -> 30
+                            BugType.GOLD -> {
+                                computeGoldPointsRobust(goldRate, playerDifficulty)
+                            }
                         }
-                        score += points
+                        // эффект попадания (используем текущие координаты)
+                        hitEffect = HitEffect(id = bug.id, x = bug.x, y = bug.y, points = points)
                         bugs = bugs.filter { it.id != bug.id }
-                        showHitEffect = bug.id
-                        debugInfo = "Попадание! +$points очков. Осталось жуков: ${bugs.size}"
+                        score += points
+                        debugInfo = "Попадание +$points (goldRate=${"%.2f".format(goldRate)})"
                     }
                 }
             )
         }
 
-        // Отображение бонусов
+        // отображение бонусов (как раньше)
         bonuses.forEach { bonus ->
             Box(
                 modifier = Modifier
-                    .offset(
-                        x = (bonus.x * ctx.resources.displayMetrics.widthPixels - 50).dp,
-                        y = (bonus.y * ctx.resources.displayMetrics.heightPixels - 50).dp
-                    )
-                    .size(100.dp)
+                    .offset(x = (bonus.x * screenWidth - bugHalfSizeDp).dp, y = (bonus.y * screenHeight - bugHalfSizeDp).dp)
+                    .size(bugSizeDp.dp)
                     .clickable {
                         if (gameState == GameState.RUNNING) {
                             bonuses = bonuses.filter { it.id != bonus.id }
                             gravityEnabled = true
-                            // Воспроизведение звука "крика жуков"
-                            val mp = MediaPlayer.create(ctx, R.raw.bug_scream)  // Требуется добавить ресурс raw/bug_scream
-                            mp.start()
-                            debugInfo = "Бонус активирован! Гравитация включена с звуком крика жуков."
+                            gravityTimer = 5f
+                            try {
+                                val mp = MediaPlayer.create(ctx, R.raw.bug_scream)
+                                mp?.let { it.setOnCompletionListener { p -> p.release() }; it.start() }
+                            } catch (_: Exception) {}
+                            debugInfo = "Бонус активирован"
                         }
                     }
             ) {
-                Image(
-                    painter = painterResource(id = R.drawable.bonus_icon),  // Требуется добавить drawable/bonus_icon
-                    contentDescription = "Бонус",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Fit
-                )
+                Image(painter = painterResource(id = R.drawable.bonus_icon), contentDescription = "Бонус", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
             }
         }
 
-        // Эффект попадания
-        showHitEffect?.let { hitBugId ->
-            val bug = bugs.find { it.id == hitBugId }
-            bug?.let {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .offset(
-                            x = (it.x * ctx.resources.displayMetrics.widthPixels - 60).dp,
-                            y = (it.y * ctx.resources.displayMetrics.heightPixels - 60).dp
-                        )
-                        .size(120.dp)
-                ) {
-                    Text(
-                        "+${when (it.type) {
-                            BugType.ANT -> 10
-                            BugType.BEETLE -> 20
-                            BugType.SPIDER -> 30
-                        }}",
-                        color = Color.Yellow,
-                        style = MaterialTheme.typography.headlineSmall
-                    )
-                }
+        // эффект попадания
+        hitEffect?.let { he ->
+            Box(modifier = Modifier.offset(x = (he.x * screenWidth - bugHalfSizeDp - 10f).dp, y = (he.y * screenHeight - bugHalfSizeDp - 10f).dp).size(120.dp)) {
+                Text("+${he.points}", color = Color.Yellow, style = MaterialTheme.typography.headlineSmall)
             }
         }
 
-        // Интерфейс поверх игры
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp)
-        ) {
-            // Верхняя панель с информацией и кнопкой паузы
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+        // UI сверху
+        Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column {
-                    Text(
-                        text = "Очки: $score",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = Color.White
-                    )
-                    Text(
-                        text = "Промахи: $misses",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White
-                    )
-                    Text(
-                        text = "Игрок: $currentPlayer",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White
-                    )
-                    Text(
-                        text = "Сложность: $playerDifficulty",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White
-                    )
-                    Text(
-                        text = "Жуков: ${bugs.size}/$actualMaxBugs",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White
-                    )
-                    if (gameState == GameState.RUNNING) {
-                        Text(
-                            text = "Время: ${roundTimeLeft.toInt()} сек",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White
-                        )
-                    }
-                    Text(
-                        text = "Скорость: ${"%.1f".format(actualGameSpeed)}x",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White
-                    )
-                    Text(
-                        text = "Гравитация: ${if (gravityEnabled) "Вкл" else "Выкл"}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White
-                    )
-                    // Отладочная информация
-                    if (debugInfo.isNotEmpty()) {
-                        Text(
-                            text = debugInfo,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.Yellow
-                        )
-                    }
+                    Text("Очки: $score", style = MaterialTheme.typography.headlineMedium, color = Color.White)
+                    Text("Промахи: $misses", style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                    Text("Игрок: $currentPlayer", style = MaterialTheme.typography.bodySmall, color = Color.White)
+                    Text("Сложность: $playerDifficulty", style = MaterialTheme.typography.bodySmall, color = Color.White)
+                    Text("Жуков: ${bugs.size}/$actualMaxBugs", style = MaterialTheme.typography.bodySmall, color = Color.White)
+                    if (gameState == GameState.RUNNING) Text("Время: ${roundTimeLeft.toInt()} сек", style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                    Text("Скорость: ${"%.1f".format(actualGameSpeed)}x", style = MaterialTheme.typography.bodySmall, color = Color.White)
+                    Text("Гравитация: ${if (gravityEnabled) "Вкл" else "Выкл"}", style = MaterialTheme.typography.bodySmall, color = Color.White)
+                    Text(text = "Курс золота: $goldText руб", style = MaterialTheme.typography.bodySmall, color = Color.Yellow)
+                    if (debugInfo.isNotEmpty()) Text(debugInfo, style = MaterialTheme.typography.bodySmall, color = Color.Yellow)
                 }
 
-                // Кнопка паузы/продолжения в правом верхнем углу (компактный вариант с иконками)
                 if (gameState == GameState.RUNNING || gameState == GameState.PAUSED) {
-                    Column(
-                        horizontalAlignment = Alignment.End,
-                        modifier = Modifier.width(90.dp)
-                    ) {
+                    Column(horizontalAlignment = Alignment.End, modifier = Modifier.width(90.dp)) {
                         if (gameState == GameState.RUNNING) {
-                            Button(
-                                onClick = {
-                                    gameState = GameState.PAUSED
-                                    debugInfo = "Игра на паузе"
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-                                modifier = Modifier.width(90.dp).height(36.dp)
-                            ) {
+                            Button(onClick = { gameState = GameState.PAUSED; debugInfo = "Пауза" }, colors = ButtonDefaults.buttonColors(containerColor = Color.White), modifier = Modifier.width(90.dp).height(36.dp)) {
                                 Text("⏸️", fontSize = 14.sp)
                             }
-                        } else if (gameState == GameState.PAUSED) {
-                            Column(
-                                horizontalAlignment = Alignment.End
-                            ) {
-                                Button(
-                                    onClick = {
-                                        gameState = GameState.RUNNING
-                                        debugInfo = "Игра продолжена"
-                                    },
-                                    modifier = Modifier.width(90.dp).height(36.dp)
-                                ) {
-                                    Text("▶️", fontSize = 14.sp)
-                                }
+                        } else {
+                            Column(horizontalAlignment = Alignment.End) {
+                                Button(onClick = { gameState = GameState.RUNNING; debugInfo = "Продолжено" }, modifier = Modifier.width(90.dp).height(36.dp)) { Text("▶️", fontSize = 14.sp) }
                                 Spacer(modifier = Modifier.height(4.dp))
-                                Button(
-                                    onClick = {
-                                        gameState = GameState.NOT_STARTED
-                                        score = 0
-                                        misses = 0
-                                        bugs = emptyList()
-                                        bonuses = emptyList()
-                                        savedTime = 0f
-                                        debugInfo = "Новая игра"
-                                    },
-                                    modifier = Modifier.width(90.dp).height(36.dp)
-                                ) {
-                                    Text("🔄", fontSize = 14.sp)
-                                }
+                                Button(onClick = { gameState = GameState.NOT_STARTED; score = 0; misses = 0; bugs = emptyList(); bonuses = emptyList(); savedTime = 0f; debugInfo = "Новая игра" }, modifier = Modifier.width(90.dp).height(36.dp)) { Text("🔄", fontSize = 14.sp) }
                             }
                         }
                     }
@@ -470,116 +417,54 @@ fun GameScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // Центральные кнопки управления игрой (только для NOT_STARTED и FINISHED)
             when (gameState) {
                 GameState.NOT_STARTED -> {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.align(Alignment.CenterHorizontally)
-                    ) {
-                        Button(
-                            onClick = {
-                                gameState = GameState.RUNNING
-                                score = 0
-                                misses = 0
-                                bugs = emptyList()
-                                bonuses = emptyList()
-                                lastBugId = 0
-                                savedTime = 0f
-                                debugInfo = "Новая игра. Сложность: $playerDifficulty, Макс жуков: $actualMaxBugs"
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-                            elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp)
-                        ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                        Button(onClick = {
+                            gameState = GameState.RUNNING
+                            score = 0; misses = 0; bugs = emptyList(); bonuses = emptyList(); lastBugId = 0; savedTime = 0f
+                            // Сразу запросим курс при старте (в фоне)
+                            coroutineScope.launch { viewModel.refreshOnce() }
+                        }, colors = ButtonDefaults.buttonColors(containerColor = Color.White), elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp)) {
                             Text("Начать игру", color = Color.Black)
                         }
                         Spacer(modifier = Modifier.height(16.dp))
-                        Card(
-                            modifier = Modifier.padding(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.9f))
-                        ) {
+                        Card(modifier = Modifier.padding(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.9f))) {
                             Column(modifier = Modifier.padding(16.dp)) {
-                                Text(
-                                    "Текущие настройки:",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = Color.Black
-                                )
+                                Text("Текущие настройки:", style = MaterialTheme.typography.titleMedium, color = Color.Black)
                                 Text("• Скорость: ${"%.1f".format(actualGameSpeed)}x", color = Color.Black)
                                 Text("• Макс жуков: $actualMaxBugs", color = Color.Black)
                                 Text("• Длительность: ${actualRoundDuration.toInt()} сек", color = Color.Black)
                                 Text("• Сложность: $playerDifficulty", color = Color.Black)
                                 Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    "Как играть:",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = Color.Black
-                                )
+                                Text("Как играть:", style = MaterialTheme.typography.titleMedium, color = Color.Black)
                                 Text("• Кликайте на насекомых", color = Color.Black)
                                 Text("• Муравей = 10 очков", color = Color.Black)
                                 Text("• Жук = 20 очков", color = Color.Black)
                                 Text("• Паук = 30 очков", color = Color.Black)
+                                Text("• Золотой таракан = очки, пропорциональные курсу золота ЦБ", color = Color.Black)
                                 Text("• Промах = -2 очка", color = Color.Red)
                             }
                         }
                     }
                 }
                 GameState.FINISHED -> {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.align(Alignment.CenterHorizontally)
-                    ) {
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = Color.White),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 16.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(
-                                    "Раунд завершен!",
-                                    style = MaterialTheme.typography.headlineMedium,
-                                    color = Color.Black
-                                )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                        Card(colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(defaultElevation = 16.dp)) {
+                            Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Раунд завершен!", style = MaterialTheme.typography.headlineMedium, color = Color.Black)
                                 Spacer(modifier = Modifier.height(16.dp))
-                                Text(
-                                    "Итоговый счет: $score",
-                                    style = MaterialTheme.typography.headlineSmall,
-                                    color = Color.Black
-                                )
-                                Text(
-                                    "Промахов: $misses",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = Color.Black
-                                )
-                                Text(
-                                    "Сложность: $playerDifficulty",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = Color.Black
-                                )
+                                Text("Итоговый счет: $score", style = MaterialTheme.typography.headlineSmall, color = Color.Black)
+                                Text("Промахов: $misses", style = MaterialTheme.typography.bodyLarge, color = Color.Black)
+                                Text("Сложность: $playerDifficulty", style = MaterialTheme.typography.bodyLarge, color = Color.Black)
                                 Spacer(modifier = Modifier.height(24.dp))
-                                Button(
-                                    onClick = {
-                                        gameState = GameState.NOT_STARTED
-                                        score = 0
-                                        misses = 0
-                                        bugs = emptyList()
-                                        bonuses = emptyList()
-                                        savedTime = 0f
-                                    },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
+                                Button(onClick = { gameState = GameState.NOT_STARTED; score = 0; misses = 0; bugs = emptyList(); bonuses = emptyList(); savedTime = 0f }, modifier = Modifier.fillMaxWidth()) {
                                     Text("Новая игра")
                                 }
                                 LaunchedEffect(Unit) {
                                     if (score > 0 && PlayerManager.getCurrentPlayerId() > 0) {
                                         coroutineScope.launch {
-                                            val scoreEntity = ScoreEntity(
-                                                playerId = PlayerManager.getCurrentPlayerId(),
-                                                score = score,
-                                                difficulty = playerDifficulty,
-                                                timestamp = System.currentTimeMillis()
-                                            )
+                                            val scoreEntity = ScoreEntity(playerId = PlayerManager.getCurrentPlayerId(), score = score, difficulty = playerDifficulty, timestamp = System.currentTimeMillis())
                                             scoreRepository.insertScore(scoreEntity)
                                         }
                                     }
@@ -588,10 +473,7 @@ fun GameScreen(
                         }
                     }
                 }
-                else -> {
-                    // Для RUNNING и PAUSED - пустой spacer, так как кнопки уже в верхнем правом углу
-                    Spacer(modifier = Modifier.weight(1f))
-                }
+                else -> Spacer(modifier = Modifier.weight(1f))
             }
 
             Spacer(modifier = Modifier.weight(1f))
@@ -599,37 +481,48 @@ fun GameScreen(
     }
 }
 
+// создаём золотого таракана (медленнее и с отдельной иконкой)
+fun createGoldBug(id: Int, gameSpeed: Float, minX: Float, maxX: Float, minY: Float, maxY: Float): VisualBug {
+    val speed = 0.01f
+    var speedX = (Random.nextFloat() - 0.5f) * speed * 2f
+    var speedY = (Random.nextFloat() - 0.5f) * speed * 2f
+    val minSpeed = 0.002f
+    if (abs(speedX) < minSpeed) speedX = minSpeed * if (speedX >= 0) 1f else -1f
+    if (abs(speedY) < minSpeed) speedY = minSpeed * if (speedY >= 0) 1f else -1f
+
+    return VisualBug(
+        id = id,
+        x = Random.nextFloat() * (maxX - minX) + minX,
+        y = Random.nextFloat() * (maxY - minY) + minY,
+        speedX = speedX,
+        speedY = speedY,
+        rotationSpeed = (Random.nextFloat() - 0.5f) * 2f,
+        type = BugType.GOLD,
+        baseSpeedX = speedX,
+        baseSpeedY = speedY
+    )
+}
+
 @Composable
-fun VisualBugItem(
-    bug: VisualBug,
-    onClick: () -> Unit
-) {
+fun VisualBugItem(bug: VisualBug, screenWidth: Float, screenHeight: Float, bugHalfSizeDp: Float, onClick: () -> Unit) {
     val bugImage = when (bug.type) {
         BugType.ANT -> R.drawable.bug_ant
         BugType.BEETLE -> R.drawable.bug_beetle
         BugType.SPIDER -> R.drawable.bug_spider
+        BugType.GOLD -> R.drawable.bug_gold // добавь drawable/bug_gold
     }
 
     Box(
         modifier = Modifier
-            .offset(
-                x = (bug.x * LocalContext.current.resources.displayMetrics.widthPixels - 50).dp,
-                y = (bug.y * LocalContext.current.resources.displayMetrics.heightPixels - 50).dp
-            )
+            .offset(x = (bug.x * screenWidth - bugHalfSizeDp).dp, y = (bug.y * screenHeight - bugHalfSizeDp).dp)
             .size(100.dp)
             .clickable { onClick() }
     ) {
-        Image(
-            painter = painterResource(id = bugImage),
-            contentDescription = "Насекомое",
-            modifier = Modifier
-                .fillMaxSize()
-                .rotate(bug.rotation),
-            contentScale = ContentScale.Fit
-        )
+        Image(painter = painterResource(id = bugImage), contentDescription = "Насекомое", modifier = Modifier.fillMaxSize().rotate(bug.rotation), contentScale = ContentScale.Fit)
     }
 }
 
+// VisualBug и createRandomVisualBug оставляем прежними (как у тебя), но с полем baseSpeedX/baseSpeedY
 data class VisualBug(
     val id: Int,
     val x: Float,
@@ -638,30 +531,47 @@ data class VisualBug(
     val speedY: Float,
     val rotation: Float = 0f,
     val rotationSpeed: Float = 0f,
-    val type: BugType
+    val type: BugType,
+    val baseSpeedX: Float = speedX,
+    val baseSpeedY: Float = speedY
 )
 
-fun createRandomVisualBug(id: Int, difficulty: Int, gameSpeed: Float = 1f): VisualBug {
-    val baseSpeed = 0.004f
+fun createRandomVisualBug(id: Int, difficulty: Int, gameSpeed: Float = 1f, minX: Float, maxX: Float, minY: Float, maxY: Float): VisualBug {
+    val baseSpeed = 0.02f
 
-    val difficultyMultiplier = when (difficulty) {
-        1 -> 0.5f  // Легко - медленные
-        2 -> 1.0f  // Нормально
-        3 -> 2.0f  // Сложно - быстрые
-        4 -> 2.5f  // Очень сложно
-        5 -> 3.0f  // Эксперт
+    // Теперь difficulty 1..10
+    val difficultyMultiplier = when (difficulty.coerceIn(1, 10)) {
+        1 -> 0.5f
+        2 -> 0.8f
+        3 -> 1.0f
+        4 -> 1.2f
+        5 -> 1.5f
+        6 -> 1.8f
+        7 -> 2.1f
+        8 -> 2.4f
+        9 -> 2.7f
+        10 -> 3.0f
         else -> 1.0f
     }
 
     val finalSpeed = baseSpeed * difficultyMultiplier * gameSpeed
 
+    var speedX = (Random.nextFloat() - 0.5f) * finalSpeed * 2f
+    var speedY = (Random.nextFloat() - 0.5f) * finalSpeed * 2f
+    val minSpeed = 0.005f
+    if (abs(speedX) < minSpeed) speedX = minSpeed * if (speedX >= 0) 1f else -1f
+    if (abs(speedY) < minSpeed) speedY = minSpeed * if (speedY >= 0) 1f else -1f
+
     return VisualBug(
         id = id,
-        x = Random.nextFloat() * 0.8f + 0.1f,
-        y = Random.nextFloat() * 0.8f + 0.1f,
-        speedX = (Random.nextFloat() - 0.5f) * finalSpeed,
-        speedY = (Random.nextFloat() - 0.5f) * finalSpeed,
+        x = Random.nextFloat() * (maxX - minX) + minX,
+        y = Random.nextFloat() * (maxY - minY) + minY,
+        speedX = speedX,
+        speedY = speedY,
         rotationSpeed = (Random.nextFloat() - 0.5f) * 3f,
-        type = BugType.entries.random()
+        type = BugType.values().filter { it != BugType.GOLD }.random(),
+        baseSpeedX = speedX,
+        baseSpeedY = speedY
     )
 }
+

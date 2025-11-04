@@ -121,4 +121,8 @@
     <string name="course_3">3 курс</string>
     <string name="course_4">4 курс</string>
     <string name="course_5">5 курс</string>
+
+    <string name="widget_title_gold">Золото</string>
+    <string name="widget_placeholder">—</string>
+    <string name="widget_icon_desc">Иконка золота</string>
 </resources>
