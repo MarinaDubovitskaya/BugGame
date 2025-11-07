@@ -14,8 +14,6 @@ import java.net.HttpURLConnection
 import java.nio.charset.StandardCharsets
 import org.json.JSONObject
 
-
-
 class CurrencyRepository(private val api: CurrencyApi) {
 
     companion object {
@@ -92,7 +90,7 @@ class CurrencyRepository(private val api: CurrencyApi) {
                 }
             }
 
-            // 2) Попытка через Retrofit metals
+
             val metalsXml = try { api.getMetalsXml() } catch (e: Exception) {
                 Log.w(TAG, "getMetalsXml failed: ${e.message}")
                 ""
@@ -106,7 +104,7 @@ class CurrencyRepository(private val api: CurrencyApi) {
                 }
             }
 
-            // 3) Прямая HTTPS попытка (обработка редиректов)
+
             val xmlDirect = fetchMetalsDirectly()
             if (!xmlDirect.isNullOrBlank()) {
                 Log.d(TAG, "direct metalsXml length=${xmlDirect.length}")
@@ -117,14 +115,14 @@ class CurrencyRepository(private val api: CurrencyApi) {
                 }
             }
 
-            // 4) Фолбэк: внешнее API + конвертация в рубли
+
             val external = try { fetchGoldByExternalAndConvertToRUB(dailyXml) } catch (e: Exception) { null }
             if (external != null && external > 0.0) {
                 Log.d(TAG, "external fallback -> $external")
                 return@withContext external
             }
 
-            // 5) Универсальный regex-фолбэк по обоим XML
+
             val combined = (dailyXml + "\n" + metalsXml + "\n" + (xmlDirect ?: "")).ifBlank { "" }
             val fallback = parseByNameRegex(combined)
             Log.d(TAG, "regex fallback parse -> $fallback")
@@ -136,8 +134,6 @@ class CurrencyRepository(private val api: CurrencyApi) {
             return@withContext 0.0
         }
     }
-
-    // Попытка поиска в daily XML
     private fun parseGoldFromDailyXml(xml: String): Double? {
         if (xml.isBlank()) return null
         try {
@@ -193,12 +189,9 @@ class CurrencyRepository(private val api: CurrencyApi) {
         }
         return null
     }
-
-    // Попытка поиска в metals XML
     private fun parseGoldFromMetalsXml(xml: String): Double? {
         if (xml.isBlank()) return null
         try {
-            // Часто metals XML имеет <Record>..<Name>Золото</Name>..<Value>12345,67</Value>..
             val nameRegex = Regex("(?s)<Name[^>]*>\\s*([^<]+?)\\s*</Name>.*?<Value[^>]*>\\s*([^<]+?)\\s*</Value>", RegexOption.IGNORE_CASE)
             val match = nameRegex.find(xml)
             if (match != null) {
@@ -208,8 +201,6 @@ class CurrencyRepository(private val api: CurrencyApi) {
                     return valueText.toDoubleOrNull()
                 }
             }
-
-            // Fallback: пробуем классический xml-парсер (как резерв)
             val factory = XmlPullParserFactory.newInstance()
             val parser = factory.newPullParser()
             parser.setInput(StringReader(xml))
@@ -256,12 +247,9 @@ class CurrencyRepository(private val api: CurrencyApi) {
         }
         return null
     }
-
-    // Универсальный regex-поиск числа рядом со словом "золото" или "gold"
     private fun parseByNameRegex(xml: String): Double? {
         if (xml.isBlank()) return null
         try {
-            // Ищем кусок с упоминанием "золото" / "gold"
             val lower = xml.lowercase()
             val idx = lower.indexOf("золото").takeIf { it >= 0 } ?: lower.indexOf("gold").takeIf { it >= 0 } ?: -1
             if (idx >= 0) {
@@ -280,17 +268,13 @@ class CurrencyRepository(private val api: CurrencyApi) {
         return null
     }
 
-    // НОВЫЙ - попытка получить цену золота из публичного JSON (в USD) и конвертировать в RUB через dailyXml
     private fun fetchGoldByExternalAndConvertToRUB(dailyXml: String): Double? {
         try {
-            // 1) получим USD->RUB из dailyXml
             var usdToRub: Double? = null
             if (dailyXml.isNotBlank()) {
-                // простой парсинг: ищем <CharCode>USD</CharCode> и соответствующий <Value>
                 val lower = dailyXml.lowercase()
                 val idx = lower.indexOf("<charcode>usd</charcode>")
                 if (idx >= 0) {
-                    // найдем ближайший <value> после idx (хитро но работает для стандартного xml)
                     val valueIdx = lower.indexOf("<value", idx)
                     if (valueIdx >= 0) {
                         val start = lower.indexOf('>', valueIdx) + 1
@@ -303,7 +287,6 @@ class CurrencyRepository(private val api: CurrencyApi) {
                 }
             }
 
-            // 2) получим цену золота в USD (за унцию) из data-asg.goldprice.org
             val apiUrl = "https://data-asg.goldprice.org/dbXRates/USD"
             val conn = (URL(apiUrl).openConnection() as HttpURLConnection).apply {
                 connectTimeout = 10_000
@@ -315,13 +298,10 @@ class CurrencyRepository(private val api: CurrencyApi) {
             val code = conn.responseCode
             if (code in 200..299) {
                 val text = conn.inputStream.readBytes().toString(StandardCharsets.UTF_8)
-                // Попытаемся извлечь значение — структура может быть примерно такой: {"items":[{...,"xauPrice":<num>, ...}], ...}
                 try {
                     val root = JSONObject(text)
-                    // несколько вариантов структуры — пробуем несколько ключей
                     var goldUsdPerOunce: Double? = null
 
-                    // Вариант: root.items[0].xauPrice
                     if (root.has("items")) {
                         val items = root.getJSONArray("items")
                         if (items.length() > 0) {
@@ -331,19 +311,16 @@ class CurrencyRepository(private val api: CurrencyApi) {
                             } else if (it0.has("xauPriceRaw")) {
                                 goldUsdPerOunce = it0.getDouble("xauPriceRaw")
                             } else if (it0.has("price")) {
-                                // иногда имя поля просто "price"
                                 goldUsdPerOunce = it0.getDouble("price")
                             }
                         }
                     }
-                    // Если root сам содержит xau or price
                     if (goldUsdPerOunce == null) {
                         if (root.has("xauPrice")) goldUsdPerOunce = root.getDouble("xauPrice")
                         else if (root.has("price")) goldUsdPerOunce = root.getDouble("price")
                     }
 
                     if (goldUsdPerOunce != null) {
-                        // Конвертация: цена за унцию USD -> цена за грамм USD -> умножаем на USD->RUB
                         val ozToGram = 31.1034768
                         val goldUsdPerGram = goldUsdPerOunce / ozToGram
 
@@ -352,7 +329,6 @@ class CurrencyRepository(private val api: CurrencyApi) {
                             Log.d("CurrencyRepository", "external gold (USD/oz)=$goldUsdPerOunce => RUB/g=$goldRubPerGram using USD->RUB=$usdToRub")
                             return goldRubPerGram
                         } else {
-                            // если курс USD не найден — можно вернуть цену в рублях, предполагая usdToRub=1 (нет) или вернуть null
                             Log.w("CurrencyRepository", "USD->RUB not found in dailyXml; cannot convert external gold USD -> RUB")
                             return null
                         }

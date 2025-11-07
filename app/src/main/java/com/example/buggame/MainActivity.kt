@@ -58,11 +58,6 @@ class MainActivity : ComponentActivity() {
             single { scoreRepository }
         }
 
-        startKoin {
-            androidContext(this@MainActivity)
-            modules(retrofitModule)
-        }
-
         setContent {
             BugGameTheme {
                 Scaffold { innerPadding ->

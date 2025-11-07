@@ -13,13 +13,12 @@ class GameViewModel(
     private val currencyRepository: CurrencyRepository
 ) : ViewModel() {
 
-    private val _goldRate = MutableStateFlow(0.0) // рубли (Double)
+    private val _goldRate = MutableStateFlow(0.0)
     val goldRate: StateFlow<Double> = _goldRate
 
     private var refreshJob: Job? = null
 
     init {
-        // Первый запрос при старте, потом каждую минуту обновляем курс в фоне
         startAutoRefresh()
     }
 
@@ -28,7 +27,7 @@ class GameViewModel(
         refreshJob = viewModelScope.launch {
             while (true) {
                 refreshOnce()
-                delay(60_000L) // обновляем каждую минуту
+                delay(60_000L)
             }
         }
     }

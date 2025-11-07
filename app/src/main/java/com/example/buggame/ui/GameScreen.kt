@@ -38,8 +38,6 @@ import org.koin.androidx.compose.getViewModel
 import kotlin.math.roundToInt
 import android.util.Log
 
-
-
 enum class GameState { NOT_STARTED, RUNNING, PAUSED, FINISHED }
 enum class BugType { ANT, BEETLE, SPIDER, GOLD }
 
@@ -51,15 +49,9 @@ data class VisualBonus(
 )
 
 data class HitEffect(val id: Int, val x: Float, val y: Float, val points: Int)
-// --- Надёжный расчёт очков за GOLD-насекомое (поддержка 1..10 уровней) ---
 fun computeGoldPointsRobust(goldRate: Double, playerDifficulty: Int): Int {
-    // goldRate ожидается в рублях (RUB/г). Если у вас цена в RUB/oz — установите isPerOunce = true
     val isPerOunce = false
-
-    // Настройка шкалы — если необходимо, отрегулируешь divisor
-    var divisor = 1000.0  // чем меньше — тем больше очков
-
-    // Мультипликатор сложности для 1..10 (увеличивает очки с ростом уровня)
+    var divisor = 1000.0
     val difficultyMultiplier = when (playerDifficulty.coerceIn(1, 10)) {
         1 -> 0.5
         2 -> 0.8
@@ -75,7 +67,7 @@ fun computeGoldPointsRobust(goldRate: Double, playerDifficulty: Int): Int {
     }
 
     val ratePerGram = if (isPerOunce) {
-        // 1 troy oz = 31.1034768 g
+
         goldRate / 31.1034768
     } else {
         goldRate
@@ -84,7 +76,7 @@ fun computeGoldPointsRobust(goldRate: Double, playerDifficulty: Int): Int {
     val safeRate = if (ratePerGram.isFinite() && ratePerGram > 0.0) ratePerGram else 0.0
 
     val raw = (safeRate / divisor) * difficultyMultiplier
-    val pts = raw.roundToInt().coerceAtLeast(1) // минимум 1 очко
+    val pts = raw.roundToInt().coerceAtLeast(1)
 
     Log.d("GoldPoints", "goldRate=$goldRate ratePerGram=$ratePerGram divisor=$divisor difficulty=$playerDifficulty mult=$difficultyMultiplier -> raw=$raw pts=$pts")
 
@@ -199,7 +191,6 @@ fun GameScreen(modifier: Modifier = Modifier) {
                         break
                     }
 
-                    // завершение гравитации
                     if (gravityEnabled) {
                         gravityTimer -= 0.016f
                         if (gravityTimer <= 0f) {
@@ -213,7 +204,6 @@ fun GameScreen(modifier: Modifier = Modifier) {
                         }
                     }
 
-                    // бонусы по таймеру
                     if (elapsedTime - lastBonusSpawnTime >= actualBonusInterval) {
                         lastBonusId++
                         val newBonus = VisualBonus(
@@ -226,7 +216,6 @@ fun GameScreen(modifier: Modifier = Modifier) {
                     }
                     bonuses = bonuses.map { it.copy(lifetime = it.lifetime - 0.016f) }.filter { it.lifetime > 0 }
 
-                    // спавн обычных жуков по таймеру
                     val bugSpawnInterval = 0.5f
                     if (elapsedTime - lastBugSpawnTime >= bugSpawnInterval && bugs.count { it.type != BugType.GOLD } < actualMaxBugs) {
                         lastBugId++
@@ -235,7 +224,6 @@ fun GameScreen(modifier: Modifier = Modifier) {
                         lastBugSpawnTime = elapsedTime
                     }
 
-                    // === спавн золотого таракана каждые 20 секунд ===
                     val goldInterval = 20f
                     if (elapsedTime - lastGoldBugSpawnTime >= goldInterval) {
                         lastBugId++
@@ -245,7 +233,6 @@ fun GameScreen(modifier: Modifier = Modifier) {
                         debugInfo = "Появился золотой таракан (курс=${"%.2f".format(goldRate)} RUB)"
                     }
 
-                    // обновляем позиции жуков
                     bugs = bugs.map { bug ->
                         var accelX = 0f
                         var accelY = 0f
@@ -288,7 +275,6 @@ fun GameScreen(modifier: Modifier = Modifier) {
                         )
                     }
 
-                    // (опционально) отладочная информация — обновляем редко
                     val avgSpeed = if (bugs.isNotEmpty()) bugs.map { hypot(it.speedX.toDouble(), it.speedY.toDouble()) }.average() else 0.0
                     if (elapsedTime.toInt() % 5 == 0) debugInfo = "Багов:${bugs.size} avgSpeed=${"%.4f".format(avgSpeed)}"
                 }
@@ -297,7 +283,6 @@ fun GameScreen(modifier: Modifier = Modifier) {
             }
         }
 
-        // анимация попадания
         LaunchedEffect(key1 = hitEffect) {
             hitEffect?.let {
                 delay(300)
@@ -305,7 +290,6 @@ fun GameScreen(modifier: Modifier = Modifier) {
             }
         }
 
-        // фон
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -316,7 +300,6 @@ fun GameScreen(modifier: Modifier = Modifier) {
                 )
         )
 
-        // область промаха
         if (gameState == GameState.RUNNING) {
             Box(modifier = Modifier.fillMaxSize().clickable {
                 misses++
@@ -325,7 +308,6 @@ fun GameScreen(modifier: Modifier = Modifier) {
             })
         }
 
-        // отображение жуков
         bugs.forEach { bug ->
             VisualBugItem(
                 bug = bug,
@@ -352,7 +334,6 @@ fun GameScreen(modifier: Modifier = Modifier) {
             )
         }
 
-        // отображение бонусов (как раньше)
         bonuses.forEach { bonus ->
             Box(
                 modifier = Modifier
@@ -375,14 +356,12 @@ fun GameScreen(modifier: Modifier = Modifier) {
             }
         }
 
-        // эффект попадания
+
         hitEffect?.let { he ->
             Box(modifier = Modifier.offset(x = (he.x * screenWidth - bugHalfSizeDp - 10f).dp, y = (he.y * screenHeight - bugHalfSizeDp - 10f).dp).size(120.dp)) {
                 Text("+${he.points}", color = Color.Yellow, style = MaterialTheme.typography.headlineSmall)
             }
         }
-
-        // UI сверху
         Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column {
@@ -423,7 +402,6 @@ fun GameScreen(modifier: Modifier = Modifier) {
                         Button(onClick = {
                             gameState = GameState.RUNNING
                             score = 0; misses = 0; bugs = emptyList(); bonuses = emptyList(); lastBugId = 0; savedTime = 0f
-                            // Сразу запросим курс при старте (в фоне)
                             coroutineScope.launch { viewModel.refreshOnce() }
                         }, colors = ButtonDefaults.buttonColors(containerColor = Color.White), elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp)) {
                             Text("Начать игру", color = Color.Black)
@@ -480,8 +458,6 @@ fun GameScreen(modifier: Modifier = Modifier) {
         }
     }
 }
-
-// создаём золотого таракана (медленнее и с отдельной иконкой)
 fun createGoldBug(id: Int, gameSpeed: Float, minX: Float, maxX: Float, minY: Float, maxY: Float): VisualBug {
     val speed = 0.01f
     var speedX = (Random.nextFloat() - 0.5f) * speed * 2f
@@ -509,7 +485,7 @@ fun VisualBugItem(bug: VisualBug, screenWidth: Float, screenHeight: Float, bugHa
         BugType.ANT -> R.drawable.bug_ant
         BugType.BEETLE -> R.drawable.bug_beetle
         BugType.SPIDER -> R.drawable.bug_spider
-        BugType.GOLD -> R.drawable.bug_gold // добавь drawable/bug_gold
+        BugType.GOLD -> R.drawable.bug_gold
     }
 
     Box(
@@ -522,7 +498,6 @@ fun VisualBugItem(bug: VisualBug, screenWidth: Float, screenHeight: Float, bugHa
     }
 }
 
-// VisualBug и createRandomVisualBug оставляем прежними (как у тебя), но с полем baseSpeedX/baseSpeedY
 data class VisualBug(
     val id: Int,
     val x: Float,
@@ -539,7 +514,7 @@ data class VisualBug(
 fun createRandomVisualBug(id: Int, difficulty: Int, gameSpeed: Float = 1f, minX: Float, maxX: Float, minY: Float, maxY: Float): VisualBug {
     val baseSpeed = 0.02f
 
-    // Теперь difficulty 1..10
+
     val difficultyMultiplier = when (difficulty.coerceIn(1, 10)) {
         1 -> 0.5f
         2 -> 0.8f
