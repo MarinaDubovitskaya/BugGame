@@ -1,5 +1,6 @@
 package com.example.buggame
 
+import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -24,23 +25,22 @@ import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.core.context.startKoin
 import org.koin.dsl.module
 
-
-lateinit var playerRepository: PlayerRepository
-lateinit var scoreRepository: ScoreRepository
-
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Инициализация Room БД и репозиториев (как было)
+        // Инициализация Room БД
         val db = DatabaseProvider.getDatabase(this)
-        playerRepository = PlayerRepository(db.playerDao())
-        scoreRepository = ScoreRepository(db.scoreDao())
+        val playerRepo = PlayerRepository(db.playerDao())
+        val scoreRepo = ScoreRepository(db.scoreDao())
 
-        val retrofitModule = module {
+        // Модуль Koin
+        val appModule = module {
+            // --- Network ---
             single {
                 OkHttpClient.Builder()
-                    // при необходимости добавить таймауты/логгер
+                    .followRedirects(true)
+                    .followSslRedirects(true)
                     .build()
             }
             single {
@@ -50,12 +50,23 @@ class MainActivity : ComponentActivity() {
                     .addConverterFactory(ScalarsConverterFactory.create())
                     .build()
             }
-            single { get<Retrofit>().create(com.example.buggame.data.CurrencyApi::class.java) }
-            single { com.example.buggame.data.CurrencyRepository(get()) }
-            viewModel { com.example.buggame.ui.GameViewModel(get()) }
-            // сохраняем playerRepository и scoreRepository если нужны
-            single { playerRepository }
-            single { scoreRepository }
+            single<CurrencyApi> { get<Retrofit>().create(CurrencyApi::class.java) }
+            single { CurrencyRepository(get()) }
+
+            // --- Database & Repositories ---
+            // Предоставляем ранее созданные экземпляры репозиториев
+            single { playerRepo }
+            single { scoreRepo }
+
+            // --- ViewModels ---
+            // GameViewModel теперь зависит от CurrencyRepository и ScoreRepository
+            viewModel { GameViewModel(get(), get()) }
+        }
+
+        // Запуск Koin
+        startKoin {
+            androidContext(this@MainActivity)
+            modules(appModule)
         }
 
         setContent {
@@ -66,10 +77,19 @@ class MainActivity : ComponentActivity() {
                             .fillMaxSize()
                             .padding(innerPadding)
                     ) {
+                        // TabsScreen теперь будет получать зависимости (ViewModel, Repositories)
+                        // через Koin (org.koin.androidx.compose.getViewModel / get)
                         TabsScreen(modifier = Modifier.fillMaxSize())
                     }
                 }
             }
         }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // Здесь можно добавить логику для обработки поворота, например, пауза игры
+        // Но поскольку ViewModel сохраняет состояние, это может не быть нужно.
+        // Если игра крашится, добавь try-catch или специфический код.
     }
 }
