@@ -3,11 +3,10 @@
     package="com.example.buggame"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Разрешения -->
+    <!-- Разрешения должны идти здесь, на уровне <manifest> -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
-        android:name=".BugGameApp"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -17,29 +16,26 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.BugGame">
 
-    <activity
-        android:name=".MainActivity"
-        android:exported="true"
-        android:label="@string/app_name"
-        android:theme="@style/Theme.BugGame">
-        <intent-filter>
-            <action android:name="android.intent.action.MAIN" />
-            <category android:name="android.intent.category.LAUNCHER" />
-        </intent-filter>
-    </activity>
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.BugGame"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|uiMode">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
 
-    <!-- Receiver для виджета -->
-    <receiver
-        android:name=".widget.GoldRateWidgetProvider"
-        android:exported="true">
-        <intent-filter>
-            <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-        </intent-filter>
-        <meta-data
-            android:name="android.appwidget.provider"
-            android:resource="@xml/gold_widget_info" />
-    </receiver>
+        <!-- Receiver для виджета остаётся внутри <application> -->
+        <receiver android:name=".widget.GoldRateWidgetProvider" android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/gold_widget_info" />
+        </receiver>
 
-</application>
+    </application>
 
-    </manifest>
+</manifest>

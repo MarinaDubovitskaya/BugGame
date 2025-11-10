@@ -35,7 +35,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -49,22 +48,20 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberCoroutineScope
 import android.util.Log
+import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
-import kotlin.text.format
 import java.text.SimpleDateFormat
 import java.util.Locale
 import com.example.buggame.GameSettings
 import com.example.buggame.R
-import com.example.buggame.playerRepository
-import com.example.buggame.scoreRepository
+// Импортируем Koin get
+import org.koin.androidx.compose.get
+import com.example.buggame.data.PlayerRepository
+import com.example.buggame.data.ScoreRepository
 
 /**
- * TabsScreen — содержит 5 вкладок:
- * 0 Registration (использует существующий RegistrationScreen)
- * 1 Rules (HTML из ресурсов -> WebView)
- * 2 Authors (кастомизированный list: фото + имя)
- * 3 Settings (скорость, макс тараканов, интервал бонусов, длительность раунда)
- * 4 Game (игровой экран)
+ * TabsScreen — содержит 6 вкладок.
+ * Теперь он использует Koin для передачи зависимостей во вкладки (Registration, Records)
  */
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -91,11 +88,14 @@ fun TabsScreen(modifier: Modifier = Modifier) {
                 .padding(12.dp)
         ) {
             when (selectedTab) {
+                // 0. RegistrationScreen теперь получает PlayerRepository из Koin (по умолчанию)
                 0 -> RegistrationScreen(modifier = Modifier.fillMaxSize())
                 1 -> RulesTab(modifier = Modifier.fillMaxSize())
                 2 -> AuthorsTab(modifier = Modifier.fillMaxSize().padding(8.dp))
                 3 -> SettingsTab(modifier = Modifier.fillMaxSize().padding(8.dp))
+                // 4. GameScreen получает свой ViewModel из Koin (по умолчанию)
                 4 -> GameScreen(modifier = Modifier.fillMaxSize())
+                // 5. RecordsTab теперь получает репозитории из Koin
                 5 -> RecordsTab(modifier = Modifier.fillMaxSize().padding(8.dp))
             }
         }
@@ -264,15 +264,25 @@ private fun SettingsTab(modifier: Modifier = Modifier) {
         }
     }
 }
+
 @Composable
-private fun RecordsTab(modifier: Modifier = Modifier) {
+private fun RecordsTab(
+    modifier: Modifier = Modifier,
+    // Внедряем зависимости через Koin
+    scoreRepository: ScoreRepository = get(),
+    playerRepository: PlayerRepository = get()
+) {
+    // Используем внедренные репозитории
     val allScores by scoreRepository.getAllScores().collectAsState(initial = emptyList())
     val dateFormat = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
     val coroutineScope = rememberCoroutineScope()
+
+    // produceState для сопоставления ID игрока с именем
     val playerNames by produceState<Map<Long, String>>(initialValue = emptyMap(), key1 = allScores) {
         val map = mutableMapOf<Long, String>()
         coroutineScope.launch {
             allScores.forEach { score ->
+                // Используем внедренный репозиторий
                 val player = playerRepository.getPlayerById(score.playerId)
                 map[score.playerId] = player?.fullName ?: "Неизвестный игрок"
                 Log.d("RecordsTab", "Mapped ${score.playerId} to ${player?.fullName ?: "null"}")
@@ -286,7 +296,7 @@ private fun RecordsTab(modifier: Modifier = Modifier) {
             Card(modifier = Modifier.padding(8.dp)) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Игрок: ${playerNames[score.playerId] ?: "Неизвестный игрок"}",
+                        text = "Игрок: ${playerNames[score.playerId] ?: "..."}",
                         fontWeight = FontWeight.Bold
                     )
                     Text("Очки: ${score.score}")
