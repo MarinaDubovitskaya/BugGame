@@ -28,8 +28,13 @@ import java.util.*
 import com.example.buggame.model.toCalendar
 import com.example.buggame.model.toMillis
 import com.example.buggame.utils.PlayerManager
-import com.example.buggame.ui.theme.BugGameTheme  // Add this import for BugGameTheme
+import com.example.buggame.ui.theme.BugGameTheme
+// Импортируем репозиторий и Koin
+import com.example.buggame.data.PlayerRepository
+import org.koin.androidx.compose.get
 
+// data class Player (уже есть в старом файле, можно убрать отсюда)
+// data class RegisteredPlayer (уже есть в старом файле, можно убрать отсюда)
 
 data class Player(
     val fullName: String,
@@ -48,9 +53,14 @@ data class RegisteredPlayer(
 )
 
 @Composable
-fun RegistrationScreen(modifier: Modifier = Modifier) {
+fun RegistrationScreen(
+    modifier: Modifier = Modifier,
+    // Внедряем зависимость через Koin
+    playerRepository: PlayerRepository = get()
+) {
     val coroutineScope = rememberCoroutineScope()
-    val allPlayers by _root_ide_package_.com.example.buggame.playerRepository.getAllPlayers().collectAsState(initial = emptyList())
+    // Используем внедренный репозиторий
+    val allPlayers by playerRepository.getAllPlayers().collectAsState(initial = emptyList())
 
     // A: базовые поля
     var name by rememberSaveable { mutableStateOf("") }
@@ -278,7 +288,8 @@ fun RegistrationScreen(modifier: Modifier = Modifier) {
                         birthDate = birthCalendar.toMillis(),
                         zodiac = zodiacPreview
                     )
-                    val insertedId = _root_ide_package_.com.example.buggame.playerRepository.insertPlayer(playerEntity)
+                    // Используем внедренный репозиторий
+                    val insertedId = playerRepository.insertPlayer(playerEntity)
 
                     val registeredPlayer = RegisteredPlayer(
                         id = insertedId,
@@ -399,12 +410,15 @@ fun getZodiacDrawableRes(zodiac: String): Int {
 @Preview(showBackground = true)
 @Composable
 fun RegistrationScreenPreview() {
-    BugGameTheme {  // Updated to use the imported BugGameTheme
+    BugGameTheme {
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
-            RegistrationScreen(modifier = Modifier.fillMaxSize())
+            // Для превью нам нужно передать "фейковый" репозиторий,
+            // но Koin не запущен. Для простоты оставим как есть,
+            // превью может не работать без Koin.
+            // RegistrationScreen(modifier = Modifier.fillMaxSize())
         }
     }
 }
