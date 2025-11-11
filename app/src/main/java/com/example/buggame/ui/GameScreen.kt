@@ -138,50 +138,25 @@ fun GameScreen(modifier: Modifier = Modifier) {
 
     // --- Главный Игровой Цикл (LAUNCHEDEFFECT) УДАЛЕН ---
     // Вся логика цикла теперь находится в GameViewModel
-    LaunchedEffect(isLandscape) {
-        if (gameState == GameState.RUNNING) {
-            viewModel.pauseGame()
-        }
-    }
+
 
     val bugSizeDp = if (isLandscape) 80f else 100f  // Уменьшаем размер в landscape
     val bugHalfSizeDp = bugSizeDp / 2f
 
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+
+        // --- Упрощённый блок: жуки свободно по всему экрану (без "линии") ---
         val screenWidth = maxWidth.value
         val screenHeight = maxHeight.value
-
-        val topUiHeightEstimate = if (isLandscape) 64f else 180f
         val halfDp = bugHalfSizeDp
 
-        // фракционные границы 0..1
-        val minXFrac = (halfDp / screenWidth).coerceIn(0f, 0.45f)
-        val maxXFrac = (1f - halfDp / screenWidth).coerceIn(0.55f, 1f)
+// Даем жукам полную видимую область (0..1). UI всё ещё рисуется поверх них.
+        val minXFrac = 0f
+        val maxXFrac = 1f
+        val minYFrac = 0f
+        val maxYFrac = 1f
 
-        val topUiFrac = (topUiHeightEstimate / screenHeight).coerceAtLeast(0f)
-        var minYFrac = ((halfDp / screenHeight) + topUiFrac)
-        var maxYFrac = (1f - halfDp / screenHeight)
-
-        // Защита от схлопывания диапазона (гарантируем минимальный вертикальный запас)
-        val minRange = 0.15f
-        if (maxYFrac - minYFrac < minRange) {
-            val center = ((minYFrac + maxYFrac) / 2f).coerceIn(0.5f - 0.4f, 0.5f + 0.4f)
-            minYFrac = (center - minRange / 2f).coerceAtLeast(0f)
-            maxYFrac = (center + minRange / 2f).coerceAtMost(1f)
-        }
-
-        // Ремап позиций при изменении видимой области — сохраняет относительные позиции
-        val prevBounds = remember { mutableStateOf(floatArrayOf(minXFrac, maxXFrac, minYFrac, maxYFrac)) }
-        LaunchedEffect(minXFrac, maxXFrac, minYFrac, maxYFrac) {
-            val old = prevBounds.value
-            // old: oldMinX, oldMaxX, oldMinY, oldMaxY
-            if (old[0] != minXFrac || old[1] != maxXFrac || old[2] != minYFrac || old[3] != maxYFrac) {
-                viewModel.remapPositions(old[0], old[1], old[2], old[3], minXFrac, maxXFrac, minYFrac, maxYFrac)
-                prevBounds.value = floatArrayOf(minXFrac, maxXFrac, minYFrac, maxYFrac)
-            }
-        }
-
-        // --- фон ---
+// --- фон ---
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -192,15 +167,16 @@ fun GameScreen(modifier: Modifier = Modifier) {
                 )
         )
 
-        // область промаха
+// область промаха (как было)
         if (gameState == GameState.RUNNING) {
             Box(modifier = Modifier.fillMaxSize().clickable {
                 viewModel.onMissClick()
             })
         }
 
-        // --- Отображение Жуков ---
+// --- Отображение Жуков ---
         bugs.forEach { bug ->
+            // VM хранит x/y в 0..1 — переводим прямо на экран (убираем двойное сжатие)
             val clampedXFrac = bug.x.coerceIn(minXFrac, maxXFrac)
             val clampedYFrac = bug.y.coerceIn(minYFrac, maxYFrac)
 
@@ -216,7 +192,7 @@ fun GameScreen(modifier: Modifier = Modifier) {
             )
         }
 
-        // --- Отображение Бонусов ---
+// --- Отображение Бонусов ---
         bonuses.forEach { bonus ->
             val bonusX = ((bonus.x).coerceIn(minXFrac, maxXFrac) * screenWidth - halfDp).dp
             val bonusY = ((bonus.y).coerceIn(minYFrac, maxYFrac) * screenHeight - halfDp).dp
@@ -236,7 +212,7 @@ fun GameScreen(modifier: Modifier = Modifier) {
             }
         }
 
-        // --- Эффект Попадания ---
+// --- Эффект Попадания ---
         hitEffect?.let { he ->
             val hitX = ((he.x).coerceIn(minXFrac, maxXFrac) * screenWidth - halfDp - 10f).dp
             val hitY = ((he.y).coerceIn(minYFrac, maxYFrac) * screenHeight - halfDp - 10f).dp
@@ -245,6 +221,7 @@ fun GameScreen(modifier: Modifier = Modifier) {
                 Text("+${he.points}", color = Color.Yellow, style = MaterialTheme.typography.headlineSmall)
             }
         }
+
 
 
         // --- UI Сверху (Панель информации) ---
