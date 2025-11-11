@@ -18,6 +18,8 @@ import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.roundToInt
 import kotlin.random.Random
+import kotlin.math.pow
+
 
 class GameViewModel(
     private val currencyRepository: CurrencyRepository,
@@ -310,6 +312,7 @@ class GameViewModel(
 
     // --- Хелперы (перенесены из GameScreen) ---
 
+    // Замените существующую updateBugPosition на эту:
     private fun updateBugPosition(
         bug: VisualBug,
         dt: Float,
@@ -318,62 +321,90 @@ class GameViewModel(
         gravityY: Float,
         gameSpeed: Float
     ): VisualBug {
-        var accelX = 0f
-        var accelY = 0f
-        if (gravityOn) {
-            accelX = gravityX * 0.005f
-            accelY = gravityY * 0.005f
-        }
+        // frameFactor — количество "60fps кадров" в этом dt
+        val frameFactor = (dt / 0.016f).coerceAtLeast(0.001f)
 
-        var newSpeedX = bug.speedX + accelX
-        var newSpeedY = bug.speedY + accelY
+        // коэффициент ускорения от гравитации — подберите (0.02..0.05)
+        val gravityAccelFactor = 0.03f
 
-        if (gravityOn) {
-            // Трение/замедление при гравитации
-            newSpeedX *= 0.999f
-            newSpeedY *= 0.999f
-        }
+        // аккумулируем ускорение от гравитации (gravityX/Y нормированы в updateGravity)
+        val accelX = if (gravityOn) gravityX * gravityAccelFactor else 0f
+        val accelY = if (gravityOn) gravityY * gravityAccelFactor else 0f
 
-        // Ограничение скорости
-        val maxSpeed = if (bug.type == BugType.GOLD) 0.04f else 0.08f
+        // Обновляем скорость (используем frameFactor, чтобы быть совместимым с исходным движком)
+        var newSpeedX = bug.speedX + accelX * frameFactor
+        var newSpeedY = bug.speedY + accelY * frameFactor
+
+        // Демпфирование (экспоненциальное, а не простой множитель каждый кадр).
+        // Используем pow для более стабильного результата при разном frameFactor.
+        val baseDamping = if (gravityOn) 0.985f else 0.9975f
+        // перевод в экспоненциальную форму: dampingEffective = baseDamping ^ frameFactor
+        val dampingEffective = baseDamping.pow(frameFactor)
+        newSpeedX *= dampingEffective
+        newSpeedY *= dampingEffective
+
+        // Увеличенные разумные пределы скорости (чтобы движение было заметным)
+        val maxSpeed = if (bug.type == BugType.GOLD) 0.12f else 0.18f
         newSpeedX = newSpeedX.coerceIn(-maxSpeed, maxSpeed)
         newSpeedY = newSpeedY.coerceIn(-maxSpeed, maxSpeed)
 
-        var newX = bug.x + newSpeedX * gameSpeed * (dt / 0.016f) // Нормализация скорости по dt
-        var newY = bug.y + newSpeedY * gameSpeed * (dt / 0.016f)
-        var newRotation = bug.rotation + bug.rotationSpeed * (dt / 0.016f)
+        // Перемещение — используем ту же нормализацию, что и раньше: движение = speed * gameSpeed * frameFactor
+        val movedX = newSpeedX * gameSpeed * frameFactor
+        val movedY = newSpeedY * gameSpeed * frameFactor
 
-        // Логика отскока от стен (простая)
-        // В GameScreen мы будем использовать min/max X/Y из BoxWithConstraints
-        // Здесь мы просто даем им двигаться, а GameScreen их ограничит (clamp)
-        // Но лучше обрабатывать отскок здесь.
+        var finalX = bug.x + movedX
+        var finalY = bug.y + movedY
+        val newRotation = bug.rotation + bug.rotationSpeed * frameFactor
 
-        // NOTE: Логика отскока (minX/maxX) была в GameScreen.
-        // Для простоты рефакторинга, оставим пока так, но в
-        // GameScreen нужно будет использовать .coerceIn(minX, maxX)
-        // Правильнее было бы передать min/max сюда, но это усложнит VM.
-        // Вместо этого, будем проверять на 0..1 (границы экрана)
-
-        val minB = 0.05f // Минимальный отступ (5% от края)
-        val maxB = 0.95f // Максимальный отступ
-
-        if (newX < minB || newX > maxB) {
-            newSpeedX = -newSpeedX * (0.95f + Random.nextFloat() * 0.05f)
-            newX = newX.coerceIn(minB, maxB)
+        // Границы экрана в VM — используем 0..1, но НЕ "схлопываем" их в жесткие 0.05..0.95
+        if (finalX < 0f) {
+            finalX = 0f
+            newSpeedX = -newSpeedX * 0.75f
+        } else if (finalX > 1f) {
+            finalX = 1f
+            newSpeedX = -newSpeedX * 0.75f
         }
-        if (newY < minB || newY > maxB) {
-            newSpeedY = -newSpeedY * (0.95f + Random.nextFloat() * 0.05f)
-            newY = newY.coerceIn(minB, maxB)
+        if (finalY < 0f) {
+            finalY = 0f
+            newSpeedY = -newSpeedY * 0.75f
+        } else if (finalY > 1f) {
+            finalY = 1f
+            newSpeedY = -newSpeedY * 0.75f
         }
 
         return bug.copy(
-            x = newX,
-            y = newY,
+            x = finalX,
+            y = finalY,
             speedX = newSpeedX,
             speedY = newSpeedY,
             rotation = newRotation
         )
     }
+
+    // Добавьте эту функцию в класс ViewModel — вызывается из GameScreen при изменении видимой области:
+    fun remapPositions(
+        oldMinX: Float, oldMaxX: Float,
+        oldMinY: Float, oldMaxY: Float,
+        newMinX: Float, newMaxX: Float,
+        newMinY: Float, newMaxY: Float
+    ) {
+        // защитимся от некорректных диапазонов
+        val safeOldWidthX = (oldMaxX - oldMinX).takeIf { it > 0.0001f } ?: 1f
+        val safeOldWidthY = (oldMaxY - oldMinY).takeIf { it > 0.0001f } ?: 1f
+        val safeNewWidthX = (newMaxX - newMinX).takeIf { it > 0.0001f } ?: 1f
+        val safeNewWidthY = (newMaxY - newMinY).takeIf { it > 0.0001f } ?: 1f
+
+        _bugs.value = _bugs.value.map { b ->
+            // нормализуем позицию внутри старой области, затем отобразим в новую
+            val normX = ((b.x - oldMinX) / safeOldWidthX).coerceIn(0f, 1f)
+            val normY = ((b.y - oldMinY) / safeOldWidthY).coerceIn(0f, 1f)
+            val mappedX = (newMinX + normX * safeNewWidthX).coerceIn(0f, 1f)
+            val mappedY = (newMinY + normY * safeNewWidthY).coerceIn(0f, 1f)
+            b.copy(x = mappedX, y = mappedY)
+        }
+    }
+
+
 
     private fun createRandomVisualBug(id: Int, difficulty: Int, gameSpeed: Float): VisualBug {
         val baseSpeed = 0.02f

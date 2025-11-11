@@ -26,8 +26,11 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.view.Surface
 import android.media.MediaPlayer
 import org.koin.androidx.compose.getViewModel
+import android.app.Activity
+import android.view.WindowManager
 import kotlinx.coroutines.launch
 
 
@@ -57,25 +60,44 @@ fun GameScreen(modifier: Modifier = Modifier) {
     val actualBonusInterval = GameSettings.bonusInterval
     val goldText = if (goldRate <= 0.0) "N/A" else "%.2f".format(goldRate)
 
-    // --- Сенсор (остается в Composable) ---
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    // --- Сенсор (оставляем в Composable) ---
     val sensorManager = ctx.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     val accelerometer: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
 
+    // Регистрируем слушатель только когда игра действительно идёт (чтобы не жрать батарею)
     DisposableEffect(gameState) {
         val listener = object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent?) {
                 event?.let {
                     try {
-                        // Передаем данные сенсора во ViewModel
+                        val ax = it.values[0]
+                        val ay = it.values[1]
+                        val az = if (it.values.size > 2) it.values[2] else 0f
+
+                        // Используем текущую ориентацию экрана (isLandscape определён выше в GameScreen)
+                        val (screenX, screenY) = if (!isLandscape) {
+                            // portrait: "вниз" — это +ay на экране
+                            Pair(-ax, ay)
+                        } else {
+                            // landscape: подбираем соответствие осей, чтобы "вниз" на экране соответствовал падению жуков
+                            // (если поведение нужно инвертировать — поменяй знаки здесь)
+                            Pair(-ay, -ax)
+                        }
+
                         viewModel.updateGravity(
-                            x = -it.values[0] / SensorManager.GRAVITY_EARTH,
-                            y = it.values[1] / SensorManager.GRAVITY_EARTH
+                            x = screenX / SensorManager.GRAVITY_EARTH,
+                            y = screenY / SensorManager.GRAVITY_EARTH
                         )
                     } catch (e: Exception) {
-                        // Игнорируем ошибки во время ротации
+                        // безопасно игнорируем ошибки сенсора
                     }
                 }
             }
+
+
             override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
         }
 
@@ -84,39 +106,38 @@ fun GameScreen(modifier: Modifier = Modifier) {
         }
 
         onDispose {
-            sensorManager.unregisterListener(listener)
+            try {
+                sensorManager.unregisterListener(listener)
+            } catch (_: Exception) {}
         }
     }
 
-    // --- Воспроизведение звука (остается в Composable) ---
-    // Используем remember для MediaPlayer и DisposableEffect для release
-    val mediaPlayer = remember { MediaPlayer.create(ctx, R.raw.bug_scream) }
+    // --- Воспроизведение звука (используем applicationContext чтобы избежать утечек при повороте) ---
+    val appCtx = ctx.applicationContext
+    val mediaPlayer = remember { MediaPlayer.create(appCtx, R.raw.bug_scream) }
 
     LaunchedEffect(gravityEnabled) {
         if (gravityEnabled) {
             try {
-                mediaPlayer.start()
+                if (!mediaPlayer.isPlaying) mediaPlayer.start()
             } catch (e: Exception) {
-                // Игнорируем ошибки
+                // Игнорируем ошибки воспроизведения
             }
         }
     }
 
     DisposableEffect(Unit) {
         onDispose {
-            if (mediaPlayer.isPlaying) {
-                mediaPlayer.stop()
-            }
+            try {
+                if (mediaPlayer.isPlaying) mediaPlayer.stop()
+            } catch (_: Exception) {}
             mediaPlayer.release()
         }
     }
 
+
     // --- Главный Игровой Цикл (LAUNCHEDEFFECT) УДАЛЕН ---
     // Вся логика цикла теперь находится в GameViewModel
-
-    val configuration = LocalConfiguration.current
-    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-
     LaunchedEffect(isLandscape) {
         if (gameState == GameState.RUNNING) {
             viewModel.pauseGame()
@@ -130,14 +151,37 @@ fun GameScreen(modifier: Modifier = Modifier) {
         val screenWidth = maxWidth.value
         val screenHeight = maxHeight.value
 
-        // Оценки для границ (чтобы жуки не спавнились под UI)
-        val topUiHeightEstimate = if (isLandscape) 100f else 200f
-        val minX = bugHalfSizeDp / screenWidth
-        val maxX = 1f - bugHalfSizeDp / screenWidth
-        val minY = (bugHalfSizeDp + topUiHeightEstimate) / screenHeight
-        val maxY = 1f - bugHalfSizeDp / screenHeight
+        val topUiHeightEstimate = if (isLandscape) 64f else 180f
+        val halfDp = bugHalfSizeDp
 
-        // фон
+        // фракционные границы 0..1
+        val minXFrac = (halfDp / screenWidth).coerceIn(0f, 0.45f)
+        val maxXFrac = (1f - halfDp / screenWidth).coerceIn(0.55f, 1f)
+
+        val topUiFrac = (topUiHeightEstimate / screenHeight).coerceAtLeast(0f)
+        var minYFrac = ((halfDp / screenHeight) + topUiFrac)
+        var maxYFrac = (1f - halfDp / screenHeight)
+
+        // Защита от схлопывания диапазона (гарантируем минимальный вертикальный запас)
+        val minRange = 0.15f
+        if (maxYFrac - minYFrac < minRange) {
+            val center = ((minYFrac + maxYFrac) / 2f).coerceIn(0.5f - 0.4f, 0.5f + 0.4f)
+            minYFrac = (center - minRange / 2f).coerceAtLeast(0f)
+            maxYFrac = (center + minRange / 2f).coerceAtMost(1f)
+        }
+
+        // Ремап позиций при изменении видимой области — сохраняет относительные позиции
+        val prevBounds = remember { mutableStateOf(floatArrayOf(minXFrac, maxXFrac, minYFrac, maxYFrac)) }
+        LaunchedEffect(minXFrac, maxXFrac, minYFrac, maxYFrac) {
+            val old = prevBounds.value
+            // old: oldMinX, oldMaxX, oldMinY, oldMaxY
+            if (old[0] != minXFrac || old[1] != maxXFrac || old[2] != minYFrac || old[3] != maxYFrac) {
+                viewModel.remapPositions(old[0], old[1], old[2], old[3], minXFrac, maxXFrac, minYFrac, maxYFrac)
+                prevBounds.value = floatArrayOf(minXFrac, maxXFrac, minYFrac, maxYFrac)
+            }
+        }
+
+        // --- фон ---
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -151,55 +195,57 @@ fun GameScreen(modifier: Modifier = Modifier) {
         // область промаха
         if (gameState == GameState.RUNNING) {
             Box(modifier = Modifier.fillMaxSize().clickable {
-                viewModel.onMissClick() // Вызываем метод VM
+                viewModel.onMissClick()
             })
         }
 
         // --- Отображение Жуков ---
         bugs.forEach { bug ->
-            // Ограничиваем координаты, чтобы они не вылетали за экран
-            // (VM считает в 0..1, здесь мы применяем границы)
-            val bugX = (bug.x.coerceIn(minX, maxX) * screenWidth - bugHalfSizeDp).dp
-            val bugY = (bug.y.coerceIn(minY, maxY) * screenHeight - bugHalfSizeDp).dp
+            val clampedXFrac = bug.x.coerceIn(minXFrac, maxXFrac)
+            val clampedYFrac = bug.y.coerceIn(minYFrac, maxYFrac)
+
+            val bugX = (clampedXFrac * screenWidth - halfDp).dp
+            val bugY = (clampedYFrac * screenHeight - halfDp).dp
 
             VisualBugItem(
                 bug = bug,
                 xPos = bugX,
                 yPos = bugY,
                 size = bugSizeDp.dp,
-                onClick = {
-                    viewModel.onBugClick(bug.id) // Вызываем метод VM
-                }
+                onClick = { viewModel.onBugClick(bug.id) }
             )
         }
 
         // --- Отображение Бонусов ---
         bonuses.forEach { bonus ->
-            val bonusX = (bonus.x.coerceIn(minX, maxX) * screenWidth - bugHalfSizeDp).dp
-            val bonusY = (bonus.y.coerceIn(minY, maxY) * screenHeight - bugHalfSizeDp).dp
+            val bonusX = ((bonus.x).coerceIn(minXFrac, maxXFrac) * screenWidth - halfDp).dp
+            val bonusY = ((bonus.y).coerceIn(minYFrac, maxYFrac) * screenHeight - halfDp).dp
 
             Box(
                 modifier = Modifier
                     .offset(x = bonusX, y = bonusY)
                     .size(bugSizeDp.dp)
-                    .clickable {
-                        viewModel.onBonusClick(bonus.id) // Вызываем метод VM
-                    }
+                    .clickable { viewModel.onBonusClick(bonus.id) }
             ) {
-                Image(painter = painterResource(id = R.drawable.bonus_icon), contentDescription = "Бонус", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                Image(
+                    painter = painterResource(id = R.drawable.bonus_icon),
+                    contentDescription = "Бонус",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit
+                )
             }
         }
 
         // --- Эффект Попадания ---
         hitEffect?.let { he ->
-            // Используем сохраненные в HitEffect координаты (0..1)
-            val hitX = (he.x.coerceIn(minX, maxX) * screenWidth - bugHalfSizeDp - 10f).dp
-            val hitY = (he.y.coerceIn(minY, maxY) * screenHeight - bugHalfSizeDp - 10f).dp
+            val hitX = ((he.x).coerceIn(minXFrac, maxXFrac) * screenWidth - halfDp - 10f).dp
+            val hitY = ((he.y).coerceIn(minYFrac, maxYFrac) * screenHeight - halfDp - 10f).dp
 
             Box(modifier = Modifier.offset(x = hitX, y = hitY).size(120.dp)) {
                 Text("+${he.points}", color = Color.Yellow, style = MaterialTheme.typography.headlineSmall)
             }
         }
+
 
         // --- UI Сверху (Панель информации) ---
         val uiModifier = if (isLandscape) Modifier.fillMaxHeight().padding(16.dp) else Modifier.fillMaxSize().padding(16.dp)
